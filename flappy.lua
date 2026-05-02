@@ -1,4 +1,4 @@
--- flappy.cc - FULL MAIN SCRIPT (Bullet Prediction + Clean ESP)
+-- flappy.cc - FULL SCRIPT (Aimbot FPS Fixed + Bullet Prediction)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Bullet Prediction Added + Clean ESP", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Aimbot Lag Fixed + Bullet Prediction", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -26,6 +26,8 @@ local AimFOV = 120
 local AimPart = "Head"
 local BulletPrediction = false
 local BulletSpeed = 1500
+
+local currentTarget = nil
 
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
@@ -47,23 +49,25 @@ Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", R
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
-RunService.RenderStepped:Connect(function()
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    FOVCircle.Radius = AimFOV
+-- Light target scanner (runs every 0.08s instead of every frame)
+task.spawn(function()
+    while true do
+        task.wait(0.08)
+        if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then 
+            currentTarget = nil
+            continue 
+        end
 
-    if not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or not AimbotEnabled then return end
+        local lp = game.Players.LocalPlayer
+        local closest, dist = nil, math.huge
 
-    local lp = game.Players.LocalPlayer
-    local closest, dist = nil, math.huge
+        -- Fast player scan
+        for _, plr in game.Players:GetPlayers() do
+            if plr == lp or not plr.Character then continue end
+            if not TargetTeammates and plr.Team == lp.Team then continue end
 
-    for _, model in workspace:GetDescendants() do
-        if model:IsA("Model") and model:FindFirstChild("Humanoid") then
-            local p = game.Players:GetPlayerFromCharacter(model)
-            if p then
-                if not TargetTeammates and p.Team == lp.Team then continue end
-            elseif not TargetNPCs then continue end
-
-            local part = model:FindFirstChild(AimPart) or model:FindFirstChild("Head")
+            local char = plr.Character
+            local part = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
             if not part then continue end
 
             local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
@@ -74,33 +78,64 @@ RunService.RenderStepped:Connect(function()
             if VisCheck then
                 local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 1000)
                 local hit, _ = workspace:FindPartOnRayWithIgnoreList(ray, {lp.Character})
-                if hit and not hit:IsDescendantOf(model) then continue end
+                if hit and not hit:IsDescendantOf(char) then continue end
             end
 
             local realDist = (part.Position - lp.Character.HumanoidRootPart.Position).Magnitude
             if realDist < dist then dist = realDist; closest = part end
         end
-    end
 
-    if closest then
-        local aimPos = closest.Position
+        -- Light NPC scan only if enabled
+        if TargetNPCs then
+            for _, model in workspace:GetChildren() do
+                if model:IsA("Model") and model:FindFirstChild("Humanoid") and not game.Players:GetPlayerFromCharacter(model) then
+                    local part = model:FindFirstChild(AimPart) or model:FindFirstChild("Head")
+                    if not part then continue end
 
-        if BulletPrediction then
-            local root = closest.Parent:FindFirstChild("HumanoidRootPart")
-            if root and root.Velocity then
-                local travelTime = (closest.Position - lp.Character.HumanoidRootPart.Position).Magnitude / BulletSpeed
-                aimPos = aimPos + root.Velocity * travelTime
+                    local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if not onScreen then continue end
+                    local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                    if centerDist > AimFOV then continue end
+
+                    if VisCheck then
+                        local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 1000)
+                        local hit, _ = workspace:FindPartOnRayWithIgnoreList(ray, {lp.Character})
+                        if hit and not hit:IsDescendantOf(model) then continue end
+                    end
+
+                    local realDist = (part.Position - lp.Character.HumanoidRootPart.Position).Magnitude
+                    if realDist < dist then dist = realDist; closest = part end
+                end
             end
         end
 
-        local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-        Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / Smoothness)
+        currentTarget = closest
     end
 end)
 
--- ====================== ESP TAB (Clean Tracers) ======================
-local ESPTab = Window:CreateTab("ESP", 4483362458)
+-- Smooth lerp (only this runs every frame)
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = AimFOV
 
+    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or not currentTarget then return end
+
+    local aimPos = currentTarget.Position
+
+    if BulletPrediction then
+        local root = currentTarget.Parent:FindFirstChild("HumanoidRootPart")
+        if root and root.Velocity then
+            local travelTime = (currentTarget.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / BulletSpeed
+            aimPos = aimPos + root.Velocity * travelTime
+        end
+    end
+
+    local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
+    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / Smoothness)
+end)
+
+-- ====================== ESP TAB (Clean) ======================
+local ESPTab = Window:CreateTab("ESP", 4483362458)
 local ESPEnabled = false
 local MaxTracerDistance = 200
 
@@ -133,10 +168,8 @@ RunService.RenderStepped:Connect(function()
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
         local distance = (root.Position - lpRoot.Position).Magnitude
-
         if not onScreen then continue end
 
-        -- 2D Box
         local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
         if not ESPData[player] then ESPData[player] = {} end
         ESPData[player].Box = box
@@ -149,7 +182,6 @@ RunService.RenderStepped:Connect(function()
         box.Filled = false
         box.Visible = true
 
-        -- Line Tracer (from center of screen)
         local tracer = ESPData[player].Tracer or Drawing.new("Line")
         ESPData[player].Tracer = tracer
         tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
@@ -159,7 +191,6 @@ RunService.RenderStepped:Connect(function()
         tracer.Transparency = 0.7
         tracer.Visible = (distance <= MaxTracerDistance)
 
-        -- Name + Health + Distance above head
         local head = char:FindFirstChild("Head")
         if head then
             local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
@@ -180,17 +211,17 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ====================== MOVEMENT TAB ======================
+-- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
 Movement:CreateInput({Name = "WalkSpeed (0-1000)", PlaceholderText = "16", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = num end end end})
 Movement:CreateInput({Name = "JumpPower (0-1000)", PlaceholderText = "50", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.JumpPower = num end end end})
 
--- ====================== MISC TAB ======================
+-- ====================== MISC ======================
 local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
--- ====================== SCRIPTHUB TAB ======================
+-- ====================== SCRIPTHUB ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
