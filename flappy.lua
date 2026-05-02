@@ -1,4 +1,4 @@
--- flappy.cc - FULL SCRIPT WITH COMPLETE SCRIPTHUB
+-- flappy.cc - FULL SCRIPT (ESP Hide Fixed + Distance Added)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "ESP Fixed - Distance Added", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -22,7 +22,7 @@ local WallbangEnabled = false
 local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = true
-local Smoothness = 10
+local Smoothness = 12
 local AimFOV = 120
 local AimPart = "Head"
 
@@ -39,7 +39,7 @@ Combat:CreateToggle({Name = "Wallbang (Shoot Through Walls)", CurrentValue = fal
 Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
 Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = true, Callback = function(v) TargetNPCs = v end})
-Combat:CreateSlider({Name = "Aimbot Smoothness", Range = {1, 25}, CurrentValue = 10, Callback = function(v) Smoothness = v end})
+Combat:CreateSlider({Name = "Aimbot Smoothness", Range = {1, 25}, CurrentValue = 12, Callback = function(v) Smoothness = v end})
 Combat:CreateSlider({Name = "Aimbot FOV", Range = {30, 400}, CurrentValue = 120, Callback = function(v) AimFOV = v end})
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
@@ -85,20 +85,28 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ====================== ESP TAB ======================
+-- ====================== ESP TAB (Fixed Hide + Distance) ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 local ESPEnabled = false
 
 ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback = function(v) ESPEnabled = v end})
 ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Name + Health", CurrentValue = true, Callback = function() end})
+ESPTab:CreateToggle({Name = "Name + Health + Distance", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
 
--- Smooth ESP
+local ESPData = {}
+
 RunService.RenderStepped:Connect(function()
-    if not ESPEnabled then return end
+    -- Hide everything when ESP is off
+    if not ESPEnabled then
+        for _, data in pairs(ESPData) do
+            if data.Box then data.Box.Visible = false end
+            if data.Tracer then data.Tracer.Visible = false end
+        end
+        return
+    end
 
     for _, player in game.Players:GetPlayers() do
         if player == game.Players.LocalPlayer or not player.Character then continue end
@@ -110,7 +118,9 @@ RunService.RenderStepped:Connect(function()
         if not onScreen then continue end
 
         -- 2D Box
-        local box = Drawing.new("Square")
+        local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
+        if not ESPData[player] then ESPData[player] = {} end
+        ESPData[player].Box = box
         local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
         box.Size = Vector2.new(height * 0.6, height * 1.8)
         box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
@@ -119,22 +129,61 @@ RunService.RenderStepped:Connect(function()
         box.Transparency = 0.4
         box.Filled = false
         box.Visible = true
-        task.wait(0.05)
-        box:Remove()
+
+        -- Tracer
+        local tracer = ESPData[player].Tracer or Drawing.new("Line")
+        ESPData[player].Tracer = tracer
+        tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+        tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+        tracer.Color = Color3.fromRGB(0, 255, 100)
+        tracer.Thickness = 2
+        tracer.Transparency = 0.65
+        tracer.Visible = true
+
+        -- Name + Health + Distance (Above Head)
+        local head = char:FindFirstChild("Head")
+        if head then
+            local distance = math.floor((root.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude)
+            local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
+            bg.Name = "flappyESP"
+            bg.Adornee = head
+            bg.Size = UDim2.new(0, 220, 0, 60)
+            bg.StudsOffset = Vector3.new(0, 3.5, 0)
+            bg.AlwaysOnTop = true
+            local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
+            txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. distance .. " studs"
+            txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+            txt.TextStrokeTransparency = 0
+            txt.TextScaled = true
+            txt.BackgroundTransparency = 1
+            txt.Parent = bg
+            bg.Parent = head
+        end
+
+        -- Cyan Chams
+        if ESPTab:FindFirstChild("Cyan Chams") and ESPTab["Cyan Chams"].CurrentValue then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.Material = Enum.Material.ForceField
+                    part.Color = Color3.fromRGB(0, 255, 200)
+                    part.Transparency = 0.3
+                end
+            end
+        end
     end
 end)
 
 -- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
-Movement:CreateSlider({Name = "WalkSpeed", Range = {16, 500}, CurrentValue = 16, Callback = function(v) pcall(function() game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v end) end})
-Movement:CreateSlider({Name = "JumpPower", Range = {50, 500}, CurrentValue = 50, Callback = function(v) pcall(function() game.Players.LocalPlayer.Character.Humanoid.JumpPower = v end) end})
+Movement:CreateSlider({Name = "WalkSpeed", Range = {0, 1000}, CurrentValue = 16, Callback = function(v) pcall(function() game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v end) end})
+Movement:CreateSlider({Name = "JumpPower", Range = {0, 1000}, CurrentValue = 50, Callback = function(v) pcall(function() game.Players.LocalPlayer.Character.Humanoid.JumpPower = v end) end})
 
 -- ====================== MISC ======================
 local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
--- ====================== SCRIPTHUB (FULL) ======================
+-- ====================== SCRIPTHUB ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
