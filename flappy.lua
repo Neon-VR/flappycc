@@ -1,3 +1,4 @@
+-- flappy.cc - FULL MAIN SCRIPT (Bullet Prediction + Clean ESP)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -7,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Key Accepted - Full Menu Loaded", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Bullet Prediction Added + Clean ESP", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -17,13 +18,14 @@ local RunService = game:GetService("RunService")
 local Combat = Window:CreateTab("Combat", 4483362458)
 
 local AimbotEnabled = false
-local WallbangEnabled = false
 local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = true
 local Smoothness = 12
 local AimFOV = 120
 local AimPart = "Head"
+local BulletPrediction = false
+local BulletSpeed = 1500
 
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
@@ -34,35 +36,17 @@ FOVCircle.Filled = false
 FOVCircle.Visible = false
 
 Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
-Combat:CreateToggle({Name = "Wallbang (Shoot Through Walls)", CurrentValue = false, Callback = function(v) WallbangEnabled = v end})
 Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
 Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = true, Callback = function(v) TargetNPCs = v end})
+Combat:CreateToggle({Name = "Bullet Prediction", CurrentValue = false, Callback = function(v) BulletPrediction = v end})
 
-Combat:CreateInput({
-    Name = "Aimbot Smoothness (1-25)",
-    PlaceholderText = "12",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then Smoothness = math.clamp(num, 1, 25) end
-    end
-})
-
-Combat:CreateInput({
-    Name = "Aimbot FOV (30-400)",
-    PlaceholderText = "120",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then AimFOV = math.clamp(num, 30, 400) end
-    end
-})
-
+Combat:CreateInput({Name = "Aimbot Smoothness (1-25)", PlaceholderText = "12", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then Smoothness = math.clamp(num, 1, 25) end end})
+Combat:CreateInput({Name = "Aimbot FOV (30-400)", PlaceholderText = "120", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then AimFOV = math.clamp(num, 30, 400) end end})
+Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then BulletSpeed = math.clamp(num, 500, 5000) end end})
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- Optimized Aimbot
 RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
@@ -72,7 +56,7 @@ RunService.RenderStepped:Connect(function()
     local lp = game.Players.LocalPlayer
     local closest, dist = nil, math.huge
 
-    for _, model in ipairs(workspace:GetChildren()) do
+    for _, model in workspace:GetDescendants() do
         if model:IsA("Model") and model:FindFirstChild("Humanoid") then
             local p = game.Players:GetPlayerFromCharacter(model)
             if p then
@@ -99,21 +83,33 @@ RunService.RenderStepped:Connect(function()
     end
 
     if closest then
-        local targetCF = CFrame.new(Camera.CFrame.Position, closest.Position)
+        local aimPos = closest.Position
+
+        if BulletPrediction then
+            local root = closest.Parent:FindFirstChild("HumanoidRootPart")
+            if root and root.Velocity then
+                local travelTime = (closest.Position - lp.Character.HumanoidRootPart.Position).Magnitude / BulletSpeed
+                aimPos = aimPos + root.Velocity * travelTime
+            end
+        end
+
+        local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
         Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / Smoothness)
     end
 end)
 
--- ====================== ESP TAB ======================
+-- ====================== ESP TAB (Clean Tracers) ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 local ESPEnabled = false
+local MaxTracerDistance = 200
 
 ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback = function(v) ESPEnabled = v end})
 ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Name + Health", CurrentValue = true, Callback = function() end})
+ESPTab:CreateToggle({Name = "Name + Health + Distance", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
+ESPTab:CreateInput({Name = "Max Tracer Distance (studs)", PlaceholderText = "200", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxTracerDistance = math.clamp(num, 50, 500) end end})
 
 local ESPData = {}
 
@@ -126,15 +122,21 @@ RunService.RenderStepped:Connect(function()
         return
     end
 
+    local lp = game.Players.LocalPlayer
+    local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+
     for _, player in game.Players:GetPlayers() do
-        if player == game.Players.LocalPlayer or not player.Character then continue end
+        if player == lp or not player.Character then continue end
         local char = player.Character
         local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then continue end
+        if not root or not lpRoot then continue end
 
         local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+        local distance = (root.Position - lpRoot.Position).Magnitude
+
         if not onScreen then continue end
 
+        -- 2D Box
         local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
         if not ESPData[player] then ESPData[player] = {} end
         ESPData[player].Box = box
@@ -147,58 +149,48 @@ RunService.RenderStepped:Connect(function()
         box.Filled = false
         box.Visible = true
 
+        -- Line Tracer (from center of screen)
         local tracer = ESPData[player].Tracer or Drawing.new("Line")
         ESPData[player].Tracer = tracer
-        tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+        tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         tracer.To = Vector2.new(screenPos.X, screenPos.Y)
         tracer.Color = Color3.fromRGB(0, 255, 100)
-        tracer.Thickness = 2
-        tracer.Transparency = 0.65
-        tracer.Visible = true
+        tracer.Thickness = 1.5
+        tracer.Transparency = 0.7
+        tracer.Visible = (distance <= MaxTracerDistance)
+
+        -- Name + Health + Distance above head
+        local head = char:FindFirstChild("Head")
+        if head then
+            local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
+            bg.Name = "flappyESP"
+            bg.Adornee = head
+            bg.Size = UDim2.new(0, 220, 0, 60)
+            bg.StudsOffset = Vector3.new(0, 3.5, 0)
+            bg.AlwaysOnTop = true
+            local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
+            txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
+            txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+            txt.TextStrokeTransparency = 0
+            txt.TextScaled = true
+            txt.BackgroundTransparency = 1
+            txt.Parent = bg
+            bg.Parent = head
+        end
     end
 end)
 
--- ====================== MOVEMENT TAB (Text Inputs) ======================
+-- ====================== MOVEMENT TAB ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
+Movement:CreateInput({Name = "WalkSpeed (0-1000)", PlaceholderText = "16", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = num end end end})
+Movement:CreateInput({Name = "JumpPower (0-1000)", PlaceholderText = "50", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.JumpPower = num end end end})
 
-Movement:CreateInput({
-    Name = "WalkSpeed (0-1000)",
-    PlaceholderText = "16",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            num = math.clamp(num, 0, 1000)
-            local char = game.Players.LocalPlayer.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid.WalkSpeed = num
-            end
-        end
-    end
-})
-
-Movement:CreateInput({
-    Name = "JumpPower (0-1000)",
-    PlaceholderText = "50",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            num = math.clamp(num, 0, 1000)
-            local char = game.Players.LocalPlayer.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid.JumpPower = num
-            end
-        end
-    end
-})
-
--- ====================== MISC ======================
+-- ====================== MISC TAB ======================
 local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
--- ====================== SCRIPTHUB ======================
+-- ====================== SCRIPTHUB TAB ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
