@@ -454,15 +454,25 @@ Hub:CreateButton({Name = "Phantom Forces CMD-X", Callback = function() loadstrin
 -- ================================
 Hub:CreateSection("🔪 MURDER MYSTERY 2")
 
-Hub:CreateButton({Name = "MysteryMania", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/lorddreambelieer9/MysteryMania-MM2-Scripts/main/loader.lua"))() end})
+Hub:CreateButton({Name = "Peachy Hub 2026 (Auto Farm, ESP, Aimbot, Kill All, Teleports)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Murder-Mystery-2-Scripts-2026/main/MM2_Script_Hub_2026.lua"))() end})
 
-Hub:CreateButton({Name = "Keyless MM2 Script (Silent Aim, ESP)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/jarvis-1446/MM2-Script/main/source.lua"))() end})
+Hub:CreateButton({Name = "Eclipse MM2 (Auto Farm Coins, Aimbot, Kill All, Teleports, GUI)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Doggo-cryto/EclipseMM2/master/Script", true))() end})
 
-Hub:CreateButton({Name = "MM2 Kill All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/MM2-Kill-All-Keyless-29920"))() end})
+Hub:CreateButton({Name = "Rogue Hub (Get Revolver, ESP, Auto Kill All, TP to Killer/Sheriff)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Kitzoon/Rogue-Hub/main/Main.lua", true))() end})
 
-Hub:CreateButton({Name = "MM2 Auto Farm Coins", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/MM2-Auto-Farm-Coins-Keyless-29919"))() end})
+Hub:CreateButton({Name = "Alchemy Hub (Xray + Kill All)", Callback = function() _G.UI_Theme = "White"; loadstring(game:HttpGet("https://luable.netlify.app/AlchemyHub/Luncher.script"))() end})
 
+Hub:CreateButton({Name = "Kidachi Auto Farm (Coins & Candy Farm)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/KidichiHB/Kidachi/main/Scripts/MM2", true))() end})
 
+Hub:CreateButton({Name = "Mars Hub MM2 (ESP, Aimbot, Auto Farm)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/1andonlymars/MarsHub/main/MM2"))() end})
+
+Hub:CreateButton({Name = "Nexus MM2 Loader", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/s-0-a-b/nexus/main/loadstring"))() end})
+
+Hub:CreateButton({Name = "zxclua MM2 Script", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/zxclua/m/main/script"))() end})
+
+Hub:CreateButton({Name = "MM2 Silent Aim + Kill Aura (NEW - Uploaded 1 week ago)", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Auto-Grab-Gun-and-Skinchanger-and-more-195477"))() end})
+
+Hub:CreateButton({Name = "MM2 Auto Win (Sheriff, Innocent, Murderer) - Mobile/PC", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Drifter0507/GUIS/main/MURDER%20MYSTERY%202", true))() end})
 -- ================================
 -- BLADE BALL
 -- ================================
