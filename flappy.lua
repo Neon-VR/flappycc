@@ -1,4 +1,4 @@
--- flappy.cc - FULL SCRIPT (Troll Tab + Full ScriptHub + Clean ESP)
+-- flappy.cc - FULL SCRIPT (Troll Tab + Full ScriptHub + Veser VIP Added)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded - Troll + ScriptHub", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Veser VIP Added to Trolling Section", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -279,6 +279,10 @@ Hub:CreateButton({Name = "R4D Keyless", Callback = function() loadstring(game:Ht
 Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
 Hub:CreateButton({Name = "Universal Keyless Advanced Aimbot + ESP", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Universal-Keyless-Advanced-Aimbot-And-Esp-Gui-90617"))() end})
 Hub:CreateButton({Name = "BEST UNIVERSAL AIMBOT (Lightweight)", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-BEST-UNIVERSAL-AIMBOT-KEYLESS-l-LIGHTWEIGHT-l-ALL-EXECUTORS-80503"))() end})
+
+Hub:CreateSection("🤡 TROLLING")
+Hub:CreateButton({Name = "FE DropKick V0.1", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/gsm231/Fe-DropKick/refs/heads/main/V0.1"))() end})
+Hub:CreateButton({Name = "Veser VIP (Trolling)", Callback = function() loadstring(game:HttpGet("https://veser.vip/"))() end})
 
 Hub:CreateSection("🔫 OTHER GAMES")
 Hub:CreateButton({Name = "RIVALS Combat Universal", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/RivalsCombat/Universal/main/loader.lua", true))() end})
