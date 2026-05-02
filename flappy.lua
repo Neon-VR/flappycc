@@ -1,4 +1,4 @@
--- flappy.cc - FULL SCRIPT (Troll Tab Added + Wallbang Removed)
+-- flappy.cc - FULL SCRIPT (Troll Tab + Upgraded ESP + Full ScriptHub)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,14 +8,14 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Troll Tab Added - Kill All / Targeted Kill", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded - Troll + Upgraded ESP", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
 
--- ====================== COMBAT TAB (Wallbang removed) ======================
+-- ====================== COMBAT TAB ======================
 local Combat = Window:CreateTab("Combat", 4483362458)
 
 local AimbotEnabled = false
@@ -122,12 +122,7 @@ local killedPlayers = {}
 Troll:CreateToggle({Name = "Kill All", CurrentValue = false, Callback = function(v) KillAllEnabled = v end})
 Troll:CreateToggle({Name = "Kill All Loop", CurrentValue = false, Callback = function(v) KillAllLoop = v end})
 
-local playerList = {}
-for _, plr in ipairs(game.Players:GetPlayers()) do
-    if plr ~= game.Players.LocalPlayer then table.insert(playerList, plr.Name) end
-end
-
-Troll:CreateDropdown({Name = "Select Player", Options = playerList, CurrentOption = {""}, Callback = function(opt)
+local playerDropdown = Troll:CreateDropdown({Name = "Select Player", Options = {}, CurrentOption = {""}, Callback = function(opt)
     local plr = game.Players:FindFirstChild(opt[1])
     SelectedPlayer = plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 end})
@@ -135,48 +130,47 @@ end})
 Troll:CreateToggle({Name = "Kill Selected Player", CurrentValue = false, Callback = function(v) KillSelectedEnabled = v end})
 Troll:CreateToggle({Name = "Loop Kill Selected Player", CurrentValue = false, Callback = function(v) LoopKillSelected = v end})
 
--- Troll logic (teleport behind + auto-shoot)
-local trollTarget = nil
+-- Auto-update player list
+task.spawn(function()
+    while true do
+        task.wait(5)
+        local list = {}
+        for _, plr in ipairs(game.Players:GetPlayers()) do
+            if plr ~= game.Players.LocalPlayer then table.insert(list, plr.Name) end
+        end
+        playerDropdown:Refresh(list)
+    end
+end)
 
 RunService.RenderStepped:Connect(function()
-    -- Kill All logic
+    local trollTarget = nil
+
     if KillAllEnabled or KillAllLoop then
         if not trollTarget or not trollTarget.Parent then
             for _, plr in ipairs(game.Players:GetPlayers()) do
-                if plr ~= game.Players.LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not killedPlayers[plr] then
-                    trollTarget = plr.Character.HumanoidRootPart
+                if plr ~= game.Players.LocalPlayer and plr.Character and not killedPlayers[plr] then
+                    trollTarget = plr.Character:FindFirstChild("HumanoidRootPart")
                     break
                 end
             end
-            if not trollTarget then
-                if KillAllLoop then
-                    killedPlayers = {} -- reset list
-                else
-                    trollTarget = nil
-                end
-            end
+            if not trollTarget and KillAllLoop then killedPlayers = {} end
         end
     elseif KillSelectedEnabled or LoopKillSelected then
         trollTarget = SelectedPlayer
-    else
-        trollTarget = nil
     end
 
     if trollTarget and trollTarget.Parent then
         local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if lpRoot then
-            -- Stay attached behind target
             lpRoot.CFrame = trollTarget.CFrame * CFrame.new(0, 0, -4) * CFrame.Angles(0, math.rad(180), 0)
         end
 
-        -- Auto-shoot while holding RMB
         if UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             VirtualUser:Button1Down(Vector2.new(0,0), Camera.CFrame)
             task.wait(0.05)
             VirtualUser:Button1Up(Vector2.new(0,0), Camera.CFrame)
         end
 
-        -- Mark as killed if dead
         local hum = trollTarget.Parent:FindFirstChild("Humanoid")
         if hum and hum.Health <= 0 then
             local plr = game.Players:GetPlayerFromCharacter(trollTarget.Parent)
@@ -186,10 +180,9 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ====================== ESP, MOVEMENT, MISC, SCRIPTHUB (unchanged) ======================
--- (ESP, Movement, Misc and ScriptHub are the same as your last working version - unchanged)
-
+-- ====================== ESP TAB (Smooth + Skeleton + Good Chams) ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
+
 local ESPEnabled = false
 local MaxTracerDistance = 200
 
@@ -197,85 +190,142 @@ ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback 
 ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Name + Health + Distance", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
+ESPTab:CreateToggle({Name = "Skeleton ESP", CurrentValue = true, Callback = function() end})
+ESPTab:CreateToggle({Name = "Good Chams (Highlight)", CurrentValue = false, Callback = function() end})
 ESPTab:CreateInput({Name = "Max Tracer Distance (studs)", PlaceholderText = "200", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxTracerDistance = math.clamp(num, 50, 500) end end})
 
 local ESPData = {}
 
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if not ESPEnabled then
-            for _, data in pairs(ESPData) do
-                if data.Box then data.Box.Visible = false end
-                if data.Tracer then data.Tracer.Visible = false end
-            end
-            continue
+RunService.RenderStepped:Connect(function()
+    if not ESPEnabled then
+        for _, data in pairs(ESPData) do
+            if data.Box then data.Box.Visible = false end
+            if data.Tracer then data.Tracer.Visible = false end
+            if data.Highlight then data.Highlight.Enabled = false end
         end
-        -- (your existing ESP code - unchanged)
-        local lp = game.Players.LocalPlayer
-        local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-        for _, player in ipairs(game.Players:GetPlayers()) do
-            if player == lp or not player.Character then continue end
-            local char = player.Character
-            local root = char:FindFirstChild("HumanoidRootPart")
-            if not root or not lpRoot then continue end
-            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-            local distance = (root.Position - lpRoot.Position).Magnitude
-            if not onScreen then continue end
+        return
+    end
 
-            local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
-            if not ESPData[player] then ESPData[player] = {} end
-            ESPData[player].Box = box
-            local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
-            box.Size = Vector2.new(height * 0.6, height * 1.8)
-            box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
-            box.Color = Color3.fromRGB(0, 255, 255)
-            box.Thickness = 2
-            box.Transparency = 0.4
-            box.Filled = false
-            box.Visible = true
+    local lp = game.Players.LocalPlayer
+    local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
 
-            local tracer = ESPData[player].Tracer or Drawing.new("Line")
-            ESPData[player].Tracer = tracer
-            tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-            tracer.Color = Color3.fromRGB(0, 255, 100)
-            tracer.Thickness = 1.5
-            tracer.Transparency = 0.7
-            tracer.Visible = (distance <= MaxTracerDistance)
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player == lp or not player.Character then continue end
+        local char = player.Character
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root or not lpRoot then continue end
 
-            local head = char:FindFirstChild("Head")
-            if head then
-                local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
-                bg.Name = "flappyESP"
-                bg.Adornee = head
-                bg.Size = UDim2.new(0, 220, 0, 60)
-                bg.StudsOffset = Vector3.new(0, 3.5, 0)
-                bg.AlwaysOnTop = true
-                local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
-                txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
-                txt.TextColor3 = Color3.fromRGB(0, 255, 255)
-                txt.TextStrokeTransparency = 0
-                txt.TextScaled = true
-                txt.BackgroundTransparency = 1
-                txt.Parent = bg
-                bg.Parent = head
+        local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+        local distance = (root.Position - lpRoot.Position).Magnitude
+        if not onScreen then continue end
+
+        -- Box
+        local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
+        if not ESPData[player] then ESPData[player] = {} end
+        ESPData[player].Box = box
+        local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
+        box.Size = Vector2.new(height * 0.6, height * 1.8)
+        box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
+        box.Color = Color3.fromRGB(0, 255, 255)
+        box.Thickness = 2
+        box.Transparency = 0.4
+        box.Filled = false
+        box.Visible = true
+
+        -- Tracer
+        local tracer = ESPData[player].Tracer or Drawing.new("Line")
+        ESPData[player].Tracer = tracer
+        tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+        tracer.Color = Color3.fromRGB(0, 255, 100)
+        tracer.Thickness = 1.5
+        tracer.Transparency = 0.7
+        tracer.Visible = (distance <= MaxTracerDistance)
+
+        -- Name + Health + Distance
+        local head = char:FindFirstChild("Head")
+        if head then
+            local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
+            bg.Name = "flappyESP"
+            bg.Adornee = head
+            bg.Size = UDim2.new(0, 220, 0, 60)
+            bg.StudsOffset = Vector3.new(0, 3.5, 0)
+            bg.AlwaysOnTop = true
+            local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
+            txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
+            txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+            txt.TextStrokeTransparency = 0
+            txt.TextScaled = true
+            txt.BackgroundTransparency = 1
+            txt.Parent = bg
+            bg.Parent = head
+        end
+
+        -- Skeleton
+        if ESPTab:FindFirstChild("Skeleton ESP") and ESPTab["Skeleton ESP"].CurrentValue then
+            local skeleton = ESPData[player].Skeleton or {}
+            ESPData[player].Skeleton = skeleton
+            local joints = {Head = char:FindFirstChild("Head"), UpperTorso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"), LowerTorso = char:FindFirstChild("LowerTorso"), LeftUpperArm = char:FindFirstChild("LeftUpperArm"), LeftLowerArm = char:FindFirstChild("LeftLowerArm"), RightUpperArm = char:FindFirstChild("RightUpperArm"), RightLowerArm = char:FindFirstChild("RightLowerArm"), LeftUpperLeg = char:FindFirstChild("LeftUpperLeg"), LeftLowerLeg = char:FindFirstChild("LeftLowerLeg"), RightUpperLeg = char:FindFirstChild("RightUpperLeg"), RightLowerLeg = char:FindFirstChild("RightLowerLeg")}
+            local connections = {{joints.Head, joints.UpperTorso}, {joints.UpperTorso, joints.LowerTorso}, {joints.UpperTorso, joints.LeftUpperArm}, {joints.LeftUpperArm, joints.LeftLowerArm}, {joints.UpperTorso, joints.RightUpperArm}, {joints.RightUpperArm, joints.RightLowerArm}, {joints.LowerTorso, joints.LeftUpperLeg}, {joints.LeftUpperLeg, joints.LeftLowerLeg}, {joints.LowerTorso, joints.RightUpperLeg}, {joints.RightUpperLeg, joints.RightLowerLeg}}
+            for i, pair in ipairs(connections) do
+                if pair[1] and pair[2] then
+                    local line = skeleton[i] or Drawing.new("Line")
+                    skeleton[i] = line
+                    local p1 = Camera:WorldToViewportPoint(pair[1].Position)
+                    local p2 = Camera:WorldToViewportPoint(pair[2].Position)
+                    line.From = Vector2.new(p1.X, p1.Y)
+                    line.To = Vector2.new(p2.X, p2.Y)
+                    line.Color = Color3.fromRGB(0, 255, 255)
+                    line.Thickness = 1.5
+                    line.Transparency = 0.8
+                    line.Visible = true
+                end
             end
+        end
+
+        -- Good Chams
+        if ESPTab:FindFirstChild("Good Chams (Highlight)") and ESPTab["Good Chams (Highlight)"].CurrentValue then
+            local highlight = ESPData[player].Highlight or Instance.new("Highlight")
+            ESPData[player].Highlight = highlight
+            highlight.Parent = char
+            highlight.FillColor = Color3.fromRGB(0, 255, 200)
+            highlight.OutlineColor = Color3.fromRGB(0, 255, 255)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0
+            highlight.Enabled = true
+        else
+            if ESPData[player] and ESPData[player].Highlight then ESPData[player].Highlight.Enabled = false end
         end
     end
 end)
 
--- Movement, Misc, ScriptHub unchanged
+-- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
 Movement:CreateInput({Name = "WalkSpeed (0-1000)", PlaceholderText = "16", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = num end end end})
 Movement:CreateInput({Name = "JumpPower (0-1000)", PlaceholderText = "50", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.JumpPower = num end end end})
 
+-- ====================== MISC ======================
 local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
+-- ====================== SCRIPTHUB ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
--- (your full ScriptHub from last version - unchanged)
+
+Hub:CreateSection("🏡 BROOKHAVEN (Keyless Only)")
+Hub:CreateButton({Name = "Nytherune Hub (Top #1)", Callback = function() loadstring(game:HttpGet("https://rawscripts.net/raw/Brookhaven-RP-Nytherune-Hub-43881"))() end})
+Hub:CreateButton({Name = "Chaos Keyless", Callback = function() loadstring(game:HttpGet("https://rawscripts.net/raw/Brookhaven-RP-Chaos-Hub-V1-NO-KEY-28077"))() end})
+Hub:CreateButton({Name = "Glazed Hub Keyless", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Brookhaven-RP-Glazed-hub-keyless-29883"))() end})
+Hub:CreateButton({Name = "R4D Keyless", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/M1ZZ001/BrookhavenR4D/main/Brookhaven%20R4D%20Script"))() end})
+
+Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
+Hub:CreateButton({Name = "Universal Keyless Advanced Aimbot + ESP", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Universal-Keyless-Advanced-Aimbot-And-Esp-Gui-90617"))() end})
+Hub:CreateButton({Name = "BEST UNIVERSAL AIMBOT (Lightweight)", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-BEST-UNIVERSAL-AIMBOT-KEYLESS-l-LIGHTWEIGHT-l-ALL-EXECUTORS-80503"))() end})
+
+Hub:CreateSection("🔫 OTHER GAMES")
+Hub:CreateButton({Name = "RIVALS Combat Universal", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/RivalsCombat/Universal/main/loader.lua", true))() end})
+Hub:CreateButton({Name = "Cali Shootout DKHUB", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/dkhub43221/scripts/refs/heads/main/Loaders",true))() end})
+Hub:CreateButton({Name = "Tha Bronx 3 Inf Gem", Callback = function() loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/9043410149cda46ff7a52e2d8329d522.lua", true))() end})
+Hub:CreateButton({Name = "Infinite Yield (Admin)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source", true))() end})
 
 Rayfield:LoadConfiguration()
