@@ -1,4 +1,4 @@
--- flappy.cc - FULL SCRIPT (Troll Tab + Upgraded ESP + Full ScriptHub)
+-- flappy.cc - FULL SCRIPT (Troll Tab + Full ScriptHub + Clean ESP)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded - Troll + Upgraded ESP", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded - Troll + ScriptHub", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -50,7 +50,6 @@ Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", R
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- Light target scanner
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -122,7 +121,12 @@ local killedPlayers = {}
 Troll:CreateToggle({Name = "Kill All", CurrentValue = false, Callback = function(v) KillAllEnabled = v end})
 Troll:CreateToggle({Name = "Kill All Loop", CurrentValue = false, Callback = function(v) KillAllLoop = v end})
 
-local playerDropdown = Troll:CreateDropdown({Name = "Select Player", Options = {}, CurrentOption = {""}, Callback = function(opt)
+local playerList = {}
+for _, plr in ipairs(game.Players:GetPlayers()) do
+    if plr ~= game.Players.LocalPlayer then table.insert(playerList, plr.Name) end
+end
+
+Troll:CreateDropdown({Name = "Select Player", Options = playerList, CurrentOption = {""}, Callback = function(opt)
     local plr = game.Players:FindFirstChild(opt[1])
     SelectedPlayer = plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 end})
@@ -130,33 +134,25 @@ end})
 Troll:CreateToggle({Name = "Kill Selected Player", CurrentValue = false, Callback = function(v) KillSelectedEnabled = v end})
 Troll:CreateToggle({Name = "Loop Kill Selected Player", CurrentValue = false, Callback = function(v) LoopKillSelected = v end})
 
--- Auto-update player list
-task.spawn(function()
-    while true do
-        task.wait(5)
-        local list = {}
-        for _, plr in ipairs(game.Players:GetPlayers()) do
-            if plr ~= game.Players.LocalPlayer then table.insert(list, plr.Name) end
-        end
-        playerDropdown:Refresh(list)
-    end
-end)
+local trollTarget = nil
 
 RunService.RenderStepped:Connect(function()
-    local trollTarget = nil
-
     if KillAllEnabled or KillAllLoop then
         if not trollTarget or not trollTarget.Parent then
             for _, plr in ipairs(game.Players:GetPlayers()) do
-                if plr ~= game.Players.LocalPlayer and plr.Character and not killedPlayers[plr] then
-                    trollTarget = plr.Character:FindFirstChild("HumanoidRootPart")
+                if plr ~= game.Players.LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not killedPlayers[plr] then
+                    trollTarget = plr.Character.HumanoidRootPart
                     break
                 end
             end
-            if not trollTarget and KillAllLoop then killedPlayers = {} end
+            if not trollTarget then
+                if KillAllLoop then killedPlayers = {} else trollTarget = nil end
+            end
         end
     elseif KillSelectedEnabled or LoopKillSelected then
         trollTarget = SelectedPlayer
+    else
+        trollTarget = nil
     end
 
     if trollTarget and trollTarget.Parent then
@@ -180,7 +176,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ====================== ESP TAB (Smooth + Skeleton + Good Chams) ======================
+-- ====================== ESP TAB ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 local ESPEnabled = false
@@ -190,111 +186,73 @@ ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback 
 ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Name + Health + Distance", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Skeleton ESP", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Good Chams (Highlight)", CurrentValue = false, Callback = function() end})
+ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
 ESPTab:CreateInput({Name = "Max Tracer Distance (studs)", PlaceholderText = "200", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxTracerDistance = math.clamp(num, 50, 500) end end})
 
 local ESPData = {}
 
-RunService.RenderStepped:Connect(function()
-    if not ESPEnabled then
-        for _, data in pairs(ESPData) do
-            if data.Box then data.Box.Visible = false end
-            if data.Tracer then data.Tracer.Visible = false end
-            if data.Highlight then data.Highlight.Enabled = false end
-        end
-        return
-    end
-
-    local lp = game.Players.LocalPlayer
-    local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-
-    for _, player in ipairs(game.Players:GetPlayers()) do
-        if player == lp or not player.Character then continue end
-        local char = player.Character
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root or not lpRoot then continue end
-
-        local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-        local distance = (root.Position - lpRoot.Position).Magnitude
-        if not onScreen then continue end
-
-        -- Box
-        local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
-        if not ESPData[player] then ESPData[player] = {} end
-        ESPData[player].Box = box
-        local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
-        box.Size = Vector2.new(height * 0.6, height * 1.8)
-        box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
-        box.Color = Color3.fromRGB(0, 255, 255)
-        box.Thickness = 2
-        box.Transparency = 0.4
-        box.Filled = false
-        box.Visible = true
-
-        -- Tracer
-        local tracer = ESPData[player].Tracer or Drawing.new("Line")
-        ESPData[player].Tracer = tracer
-        tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-        tracer.Color = Color3.fromRGB(0, 255, 100)
-        tracer.Thickness = 1.5
-        tracer.Transparency = 0.7
-        tracer.Visible = (distance <= MaxTracerDistance)
-
-        -- Name + Health + Distance
-        local head = char:FindFirstChild("Head")
-        if head then
-            local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
-            bg.Name = "flappyESP"
-            bg.Adornee = head
-            bg.Size = UDim2.new(0, 220, 0, 60)
-            bg.StudsOffset = Vector3.new(0, 3.5, 0)
-            bg.AlwaysOnTop = true
-            local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
-            txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
-            txt.TextColor3 = Color3.fromRGB(0, 255, 255)
-            txt.TextStrokeTransparency = 0
-            txt.TextScaled = true
-            txt.BackgroundTransparency = 1
-            txt.Parent = bg
-            bg.Parent = head
-        end
-
-        -- Skeleton
-        if ESPTab:FindFirstChild("Skeleton ESP") and ESPTab["Skeleton ESP"].CurrentValue then
-            local skeleton = ESPData[player].Skeleton or {}
-            ESPData[player].Skeleton = skeleton
-            local joints = {Head = char:FindFirstChild("Head"), UpperTorso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"), LowerTorso = char:FindFirstChild("LowerTorso"), LeftUpperArm = char:FindFirstChild("LeftUpperArm"), LeftLowerArm = char:FindFirstChild("LeftLowerArm"), RightUpperArm = char:FindFirstChild("RightUpperArm"), RightLowerArm = char:FindFirstChild("RightLowerArm"), LeftUpperLeg = char:FindFirstChild("LeftUpperLeg"), LeftLowerLeg = char:FindFirstChild("LeftLowerLeg"), RightUpperLeg = char:FindFirstChild("RightUpperLeg"), RightLowerLeg = char:FindFirstChild("RightLowerLeg")}
-            local connections = {{joints.Head, joints.UpperTorso}, {joints.UpperTorso, joints.LowerTorso}, {joints.UpperTorso, joints.LeftUpperArm}, {joints.LeftUpperArm, joints.LeftLowerArm}, {joints.UpperTorso, joints.RightUpperArm}, {joints.RightUpperArm, joints.RightLowerArm}, {joints.LowerTorso, joints.LeftUpperLeg}, {joints.LeftUpperLeg, joints.LeftLowerLeg}, {joints.LowerTorso, joints.RightUpperLeg}, {joints.RightUpperLeg, joints.RightLowerLeg}}
-            for i, pair in ipairs(connections) do
-                if pair[1] and pair[2] then
-                    local line = skeleton[i] or Drawing.new("Line")
-                    skeleton[i] = line
-                    local p1 = Camera:WorldToViewportPoint(pair[1].Position)
-                    local p2 = Camera:WorldToViewportPoint(pair[2].Position)
-                    line.From = Vector2.new(p1.X, p1.Y)
-                    line.To = Vector2.new(p2.X, p2.Y)
-                    line.Color = Color3.fromRGB(0, 255, 255)
-                    line.Thickness = 1.5
-                    line.Transparency = 0.8
-                    line.Visible = true
-                end
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if not ESPEnabled then
+            for _, data in pairs(ESPData) do
+                if data.Box then data.Box.Visible = false end
+                if data.Tracer then data.Tracer.Visible = false end
             end
+            continue
         end
 
-        -- Good Chams
-        if ESPTab:FindFirstChild("Good Chams (Highlight)") and ESPTab["Good Chams (Highlight)"].CurrentValue then
-            local highlight = ESPData[player].Highlight or Instance.new("Highlight")
-            ESPData[player].Highlight = highlight
-            highlight.Parent = char
-            highlight.FillColor = Color3.fromRGB(0, 255, 200)
-            highlight.OutlineColor = Color3.fromRGB(0, 255, 255)
-            highlight.FillTransparency = 0.5
-            highlight.OutlineTransparency = 0
-            highlight.Enabled = true
-        else
-            if ESPData[player] and ESPData[player].Highlight then ESPData[player].Highlight.Enabled = false end
+        local lp = game.Players.LocalPlayer
+        local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player == lp or not player.Character then continue end
+            local char = player.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not root or not lpRoot then continue end
+
+            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            local distance = (root.Position - lpRoot.Position).Magnitude
+            if not onScreen then continue end
+
+            local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
+            if not ESPData[player] then ESPData[player] = {} end
+            ESPData[player].Box = box
+            local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
+            box.Size = Vector2.new(height * 0.6, height * 1.8)
+            box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
+            box.Color = Color3.fromRGB(0, 255, 255)
+            box.Thickness = 2
+            box.Transparency = 0.4
+            box.Filled = false
+            box.Visible = true
+
+            local tracer = ESPData[player].Tracer or Drawing.new("Line")
+            ESPData[player].Tracer = tracer
+            tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+            tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+            tracer.Color = Color3.fromRGB(0, 255, 100)
+            tracer.Thickness = 1.5
+            tracer.Transparency = 0.7
+            tracer.Visible = (distance <= MaxTracerDistance)
+
+            local head = char:FindFirstChild("Head")
+            if head then
+                local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
+                bg.Name = "flappyESP"
+                bg.Adornee = head
+                bg.Size = UDim2.new(0, 220, 0, 60)
+                bg.StudsOffset = Vector3.new(0, 3.5, 0)
+                bg.AlwaysOnTop = true
+                local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
+                txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
+                txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+                txt.TextStrokeTransparency = 0
+                txt.TextScaled = true
+                txt.BackgroundTransparency = 1
+                txt.Parent = bg
+                bg.Parent = head
+            end
         end
     end
 end)
