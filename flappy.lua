@@ -1,4 +1,4 @@
--- flappy.cc - Full Script with Complete ScriptHub
+-- flappy.cc - FULL SCRIPT WITH COMPLETE SCRIPTHUB
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,17 +8,18 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "Full ScriptHub Restored", Duration = 5})
+Rayfield:Notify({Title = "flappy.cc", Content = "Full Script Loaded", Duration = 5})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 
--- ====================== COMBAT ======================
+-- ====================== COMBAT TAB ======================
 local Combat = Window:CreateTab("Combat", 4483362458)
 
 local AimbotEnabled = false
 local WallbangEnabled = false
+local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = true
 local Smoothness = 10
@@ -35,6 +36,7 @@ FOVCircle.Visible = false
 
 Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
 Combat:CreateToggle({Name = "Wallbang (Shoot Through Walls)", CurrentValue = false, Callback = function(v) WallbangEnabled = v end})
+Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
 Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = true, Callback = function(v) TargetNPCs = v end})
 Combat:CreateSlider({Name = "Aimbot Smoothness", Range = {1, 25}, CurrentValue = 10, Callback = function(v) Smoothness = v end})
@@ -42,7 +44,6 @@ Combat:CreateSlider({Name = "Aimbot FOV", Range = {30, 400}, CurrentValue = 120,
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- Aimbot Loop
 RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
@@ -67,6 +68,12 @@ RunService.RenderStepped:Connect(function()
             local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
+            if VisCheck then
+                local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 1000)
+                local hit, _ = workspace:FindPartOnRayWithIgnoreList(ray, {lp.Character})
+                if hit and not hit:IsDescendantOf(model) then continue end
+            end
+
             local realDist = (part.Position - lp.Character.HumanoidRootPart.Position).Magnitude
             if realDist < dist then dist = realDist; closest = part end
         end
@@ -87,12 +94,34 @@ ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback 
 ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Name + Health", CurrentValue = true, Callback = function() end})
 ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Purple Chams", CurrentValue = false, Callback = function() end})
+ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
 
--- ESP Loop
+-- Smooth ESP
 RunService.RenderStepped:Connect(function()
     if not ESPEnabled then return end
-    -- (ESP code - kept minimal for space, use previous version if needed)
+
+    for _, player in game.Players:GetPlayers() do
+        if player == game.Players.LocalPlayer or not player.Character then continue end
+        local char = player.Character
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+
+        local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+        if not onScreen then continue end
+
+        -- 2D Box
+        local box = Drawing.new("Square")
+        local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
+        box.Size = Vector2.new(height * 0.6, height * 1.8)
+        box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
+        box.Color = Color3.fromRGB(0, 255, 255)
+        box.Thickness = 2
+        box.Transparency = 0.4
+        box.Filled = false
+        box.Visible = true
+        task.wait(0.05)
+        box:Remove()
+    end
 end)
 
 -- ====================== MOVEMENT ======================
@@ -105,7 +134,7 @@ local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
--- ====================== SCRIPTHUB (FULL - UNTOUCHED) ======================
+-- ====================== SCRIPTHUB (FULL) ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 Hub:CreateSection("🎯 UNIVERSAL AIMBOT + ESP")
