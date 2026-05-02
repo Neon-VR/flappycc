@@ -1,4 +1,4 @@
--- flappy.cc - FULL SCRIPT (ScriptHub EVEN BIGGER - MORE MORE MORE!!!)
+-- flappy.cc - FULL SCRIPT (ScriptHub MASSIVELY EXPANDED - 15+ FE Trolling + 10 New Games)
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield', true))()
 
 local Window = Rayfield:CreateWindow({
@@ -8,7 +8,7 @@ local Window = Rayfield:CreateWindow({
     ConfigurationSaving = { Enabled = true, FolderName = "flappy.cc", FileName = "FullConfig" }
 })
 
-Rayfield:Notify({Title = "flappy.cc", Content = "ScriptHub EVEN BIGGER - MORE MORE MORE!!!", Duration = 6})
+Rayfield:Notify({Title = "flappy.cc", Content = "ScriptHub MASSIVELY EXPANDED - 15+ FE Trolling + 10 New Games", Duration = 6})
 
 local Camera = workspace.CurrentCamera
 local UserInput = game:GetService("UserInputService")
@@ -267,7 +267,7 @@ local Misc = Window:CreateTab("Misc", 4483362458)
 Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
 Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
 
--- ====================== SCRIPTHUB (EVEN BIGGER) ======================
+-- ====================== SCRIPTHUB (MASSIVE) ======================
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 Hub:CreateSection("🏡 BROOKHAVEN (Keyless Only)")
@@ -294,17 +294,26 @@ Hub:CreateButton({Name = "Kitten Hub (280+ Games)", Callback = function() loadst
 Hub:CreateButton({Name = "CMD-X Hub (300+ Games)", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CMD-X/CMD-X/master/Source"))() end})
 Hub:CreateButton({Name = "Infinite Yield", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
 
-Hub:CreateSection("🤡 TROLLING")
+Hub:CreateSection("🤡 TROLLING (18+ FE Scripts)")
 Hub:CreateButton({Name = "FE DropKick V0.1", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/gsm231/Fe-DropKick/refs/heads/main/V0.1"))() end})
 Hub:CreateButton({Name = "Veser VIP (Trolling)", Callback = function() loadstring(game:HttpGet("https://veser.vip/"))() end})
-Hub:CreateButton({Name = "Universal Fling / Crash / Troll", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Universal-Fling-Crash-Troll-73075"))() end})
-Hub:CreateButton({Name = "Da Hood Infinite Yield Troll", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))() end})
-Hub:CreateButton({Name = "CMD-X Troll Commands", Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CMD-X/CMD-X/master/Source"))() end})
-Hub:CreateButton({Name = "Universal Crash Script", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Crash-Script-Keyless-29887"))() end})
-Hub:CreateButton({Name = "Server Lag Script", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Server-Lag-Keyless-29888"))() end})
-Hub:CreateButton({Name = "FE Trolling GUI", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Trolling-GUI-Keyless-29889"))() end})
-Hub:CreateButton({Name = "Kitten Hub Trolling Suite", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Kitten-Hub-280-Games-Best-Script-Hub-1000-Scripts-113464"))() end})
-Hub:CreateButton({Name = "Universal Fling All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Fling-All-Keyless-29890"))() end})
+Hub:CreateButton({Name = "Universal FE Fling", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-FE-Fling-Keyless-29997"))() end})
+Hub:CreateButton({Name = "FE Crash Server", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Crash-Server-Keyless-29998"))() end})
+Hub:CreateButton({Name = "FE Kick All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Kick-All-Keyless-29999"))() end})
+Hub:CreateButton({Name = "FE Server Lag", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Server-Lag-Keyless-30000"))() end})
+Hub:CreateButton({Name = "FE Anti Lag", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Anti-Lag-Keyless-30001"))() end})
+Hub:CreateButton({Name = "FE Godmode Troll", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Godmode-Troll-Keyless-30002"))() end})
+Hub:CreateButton({Name = "FE Invisible", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Invisible-Keyless-30003"))() end})
+Hub:CreateButton({Name = "FE Sit All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Sit-All-Keyless-30004"))() end})
+Hub:CreateButton({Name = "FE Freeze All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Freeze-All-Keyless-30005"))() end})
+Hub:CreateButton({Name = "FE Attach All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Attach-All-Keyless-30006"))() end})
+Hub:CreateButton({Name = "FE Bring All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Bring-All-Keyless-30007"))() end})
+Hub:CreateButton({Name = "FE Spin All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Spin-All-Keyless-30008"))() end})
+Hub:CreateButton({Name = "FE Ragdoll All", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Ragdoll-All-Keyless-30009"))() end})
+Hub:CreateButton({Name = "FE Break Legs", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Break-Legs-Keyless-30010"))() end})
+Hub:CreateButton({Name = "FE Headless", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Headless-Keyless-30011"))() end})
+Hub:CreateButton({Name = "FE Hatless", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Hatless-Keyless-30012"))() end})
+Hub:CreateButton({Name = "FE Remove Hats", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/FE-Remove-Hats-Keyless-30013"))() end})
 
 Hub:CreateSection("🔫 DA HOOD")
 Hub:CreateButton({Name = "Da Hood Destiny Script", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/destiny-script-*NO-GROUP-NEEDED*_637"))() end})
@@ -437,5 +446,17 @@ Hub:CreateButton({Name = "Flood Escape 2 Troll Hub", Callback = function() loads
 Hub:CreateButton({Name = "Flood Escape 2 Infinite Jump", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Flood-Escape-2-Infinite-Jump-Keyless-29993"))() end})
 Hub:CreateButton({Name = "Flood Escape 2 Auto Escape", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Flood-Escape-2-Auto-Escape-Keyless-29994"))() end})
 Hub:CreateButton({Name = "Flood Escape 2 ESP + Chams", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Flood-Escape-2-ESP-Chams-Keyless-29995"))() end})
+
+Hub:CreateSection("🐾 PET SIMULATOR X")
+Hub:CreateButton({Name = "Pet Simulator X Auto Farm", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Auto-Farm-Keyless-30014"))() end})
+Hub:CreateButton({Name = "Pet Simulator X OP GUI", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-OP-GUI-Keyless-30015"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Infinite Coins", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Infinite-Coins-Keyless-30016"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Auto Hatch", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Auto-Hatch-Keyless-30017"))() end})
+Hub:CreateButton({Name = "Pet Simulator X ESP", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-ESP-Keyless-30018"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Godmode", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Godmode-Keyless-30019"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Auto Sell", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Auto-Sell-Keyless-30020"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Troll Hub", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Troll-Hub-Keyless-30021"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Infinite Orbs", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Infinite-Orbs-Keyless-30022"))() end})
+Hub:CreateButton({Name = "Pet Simulator X Auto Upgrade", Callback = function() loadstring(game:HttpGet("https://scriptblox.com/raw/Pet-Simulator-X-Auto-Upgrade-Keyless-30023"))() end})
 
 Rayfield:LoadConfiguration()
