@@ -26,9 +26,10 @@ local TargetNPCs = false
 local BulletPrediction = false
 local Smoothness = 12
 local AimFOV = 120
-local MaxAimDistance = 300     -- ← NEW
+local MaxAimDistance = 300
 local AimPart = "Head"
 local BulletSpeed = 1500
+local BulletDropCompensation = true   -- New: Gravity compensation
 
 local currentTarget = nil
 local Camera = workspace.CurrentCamera
@@ -75,15 +76,19 @@ Combat:CreateToggle({
     Callback = function(v) BulletPrediction = v end
 })
 
+Combat:CreateToggle({
+    Name = "Bullet Drop Compensation",
+    CurrentValue = true,
+    Callback = function(v) BulletDropCompensation = v end
+})
+
 Combat:CreateInput({
     Name = "Max Aim Distance (studs)",
     PlaceholderText = "300",
     RemoveTextAfterFocusLost = false,
     Callback = function(text)
         local num = tonumber(text)
-        if num then
-            MaxAimDistance = math.clamp(num, 50, 2000)
-        end
+        if num then MaxAimDistance = math.clamp(num, 50, 2000) end
     end
 })
 
@@ -130,10 +135,10 @@ Combat:CreateToggle({
     Callback = function(v) FOVCircle.Visible = v end
 })
 
--- ====================== TARGET FINDING LOOP ======================
+-- ====================== TARGET FINDING ======================
 task.spawn(function()
     while true do
-        task.wait(0.08) -- Slightly faster & smoother
+        task.wait(0.05)
 
         if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             currentTarget = nil
@@ -157,7 +162,6 @@ task.spawn(function()
             local root = char:FindFirstChild("HumanoidRootPart")
             if not root then continue end
 
-            -- Max Distance Check
             local realDist = (targetPart.Position - lpRoot.Position).Magnitude
             if realDist > MaxAimDistance then continue end
 
@@ -167,18 +171,15 @@ task.spawn(function()
             local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
-            -- Visibility Check
+            -- VisCheck
             if VisCheck then
                 local origin = Camera.CFrame.Position
                 local direction = (targetPart.Position - origin)
                 local raycastParams = RaycastParams.new()
                 raycastParams.FilterDescendantsInstances = {lp.Character}
                 raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
                 local result = workspace:Raycast(origin, direction, raycastParams)
-                if result and not result.Instance:IsDescendantOf(char) then
-                    continue
-                end
+                if result and not result.Instance:IsDescendantOf(char) then continue end
             end
 
             if realDist < shortestDist then
@@ -191,9 +192,8 @@ task.spawn(function()
     end
 end)
 
--- ====================== AIMING LOOP ======================
+-- ====================== IMPROVED BULLET PREDICTION ======================
 RunService.RenderStepped:Connect(function()
-    -- Update FOV Circle
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
 
@@ -202,17 +202,25 @@ RunService.RenderStepped:Connect(function()
     end
 
     local aimPos = currentTarget.Position
+    local root = currentTarget.Parent:FindFirstChild("HumanoidRootPart")
 
-    -- Bullet Prediction
-    if BulletPrediction then
-        local root = currentTarget.Parent:FindFirstChild("HumanoidRootPart")
-        if root and root.Velocity then
-            local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if lpRoot then
-                local distance = (currentTarget.Position - lpRoot.Position).Magnitude
-                local travelTime = distance / BulletSpeed
-                aimPos = aimPos + (root.Velocity * travelTime)
+    if BulletPrediction and root and root.Velocity then
+        local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if lpRoot then
+            local distance = (aimPos - lpRoot.Position).Magnitude
+            local travelTime = distance / BulletSpeed
+
+            -- Advanced Prediction
+            local predictedPos = aimPos + root.Velocity * travelTime
+
+            -- Bullet Drop Compensation (Gravity)
+            if BulletDropCompensation then
+                local gravity = workspace.Gravity
+                local drop = 0.5 * gravity * travelTime * travelTime
+                predictedPos = predictedPos + Vector3.new(0, -drop * 0.7, 0)  -- 0.7 is a good tuning factor
             end
+
+            aimPos = predictedPos
         end
     end
 
@@ -220,7 +228,7 @@ RunService.RenderStepped:Connect(function()
     Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Smoothness)
 end)
 
-print("✅ Combat Tab Loaded with Max Aim Distance")
+print("✅ Combat Tab Updated - Bullet Prediction Improved!")
 
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
