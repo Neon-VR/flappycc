@@ -24,14 +24,15 @@ local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = false
 local BulletPrediction = false
+local BulletDropCompensation = true
 local Smoothness = 12
 local AimFOV = 120
 local MaxAimDistance = 300
 local AimPart = "Head"
 local BulletSpeed = 1500
-local BulletDropCompensation = true   -- New: Gravity compensation
 
 local currentTarget = nil
+local lastTarget = nil
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -45,100 +46,26 @@ FOVCircle.Transparency = 0.75
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
--- ====================== UI ELEMENTS ======================
-Combat:CreateToggle({
-    Name = "AI Aimbot (Hold Right Click)",
-    CurrentValue = false,
-    Callback = function(v) AimbotEnabled = v end
-})
+-- ====================== UI ======================
+Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
+Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
+Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
+Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = false, Callback = function(v) TargetNPCs = v end})
+Combat:CreateToggle({Name = "Bullet Prediction", CurrentValue = false, Callback = function(v) BulletPrediction = v end})
+Combat:CreateToggle({Name = "Bullet Drop Compensation", CurrentValue = true, Callback = function(v) BulletDropCompensation = v end})
 
-Combat:CreateToggle({
-    Name = "VisCheck (Only Visible Players)",
-    CurrentValue = true,
-    Callback = function(v) VisCheck = v end
-})
+Combat:CreateInput({Name = "Max Aim Distance (studs)", PlaceholderText = "300", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxAimDistance = math.clamp(num, 50, 2000) end end})
+Combat:CreateInput({Name = "Aimbot Smoothness (1-25)", PlaceholderText = "12", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then Smoothness = math.clamp(num, 1, 25) end end})
+Combat:CreateInput({Name = "Aimbot FOV (30-400)", PlaceholderText = "120", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then AimFOV = math.clamp(num, 30, 400) end end})
+Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then BulletSpeed = math.clamp(num, 500, 5000) end end})
 
-Combat:CreateToggle({
-    Name = "Target Teammates",
-    CurrentValue = false,
-    Callback = function(v) TargetTeammates = v end
-})
+Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
+Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
-Combat:CreateToggle({
-    Name = "Target NPCs/Bots",
-    CurrentValue = false,
-    Callback = function(v) TargetNPCs = v end
-})
-
-Combat:CreateToggle({
-    Name = "Bullet Prediction",
-    CurrentValue = false,
-    Callback = function(v) BulletPrediction = v end
-})
-
-Combat:CreateToggle({
-    Name = "Bullet Drop Compensation",
-    CurrentValue = true,
-    Callback = function(v) BulletDropCompensation = v end
-})
-
-Combat:CreateInput({
-    Name = "Max Aim Distance (studs)",
-    PlaceholderText = "300",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then MaxAimDistance = math.clamp(num, 50, 2000) end
-    end
-})
-
-Combat:CreateInput({
-    Name = "Aimbot Smoothness (1-25)",
-    PlaceholderText = "12",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then Smoothness = math.clamp(num, 1, 25) end
-    end
-})
-
-Combat:CreateInput({
-    Name = "Aimbot FOV (30-400)",
-    PlaceholderText = "120",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then AimFOV = math.clamp(num, 30, 400) end
-    end
-})
-
-Combat:CreateInput({
-    Name = "Bullet Speed (studs/s)",
-    PlaceholderText = "1500",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then BulletSpeed = math.clamp(num, 500, 5000) end
-    end
-})
-
-Combat:CreateDropdown({
-    Name = "Aim Part",
-    Options = {"Head", "UpperTorso", "HumanoidRootPart"},
-    CurrentOption = {"Head"},
-    Callback = function(opt) AimPart = opt[1] end
-})
-
-Combat:CreateToggle({
-    Name = "Show FOV Circle",
-    CurrentValue = false,
-    Callback = function(v) FOVCircle.Visible = v end
-})
-
--- ====================== TARGET FINDING ======================
+-- ====================== SMARTER TARGET SELECTION ======================
 task.spawn(function()
     while true do
-        task.wait(0.05)
+        task.wait(0.03) -- Faster scanning = better tracking
 
         if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             currentTarget = nil
@@ -149,7 +76,8 @@ task.spawn(function()
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
-        local closest, shortestDist = nil, math.huge
+        local bestTarget = nil
+        local bestScore = -math.huge
 
         for _, plr in ipairs(game.Players:GetPlayers()) do
             if plr == lp or not plr.Character then continue end
@@ -157,13 +85,11 @@ task.spawn(function()
 
             local char = plr.Character
             local targetPart = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
-            if not targetPart then continue end
-
             local root = char:FindFirstChild("HumanoidRootPart")
-            if not root then continue end
+            if not targetPart or not root then continue end
 
-            local realDist = (targetPart.Position - lpRoot.Position).Magnitude
-            if realDist > MaxAimDistance then continue end
+            local distance = (targetPart.Position - lpRoot.Position).Magnitude
+            if distance > MaxAimDistance then continue end
 
             local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
             if not onScreen then continue end
@@ -171,65 +97,69 @@ task.spawn(function()
             local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
-            -- VisCheck
+            -- Visibility Check
             if VisCheck then
-                local origin = Camera.CFrame.Position
-                local direction = (targetPart.Position - origin)
-                local raycastParams = RaycastParams.new()
-                raycastParams.FilterDescendantsInstances = {lp.Character}
-                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-                local result = workspace:Raycast(origin, direction, raycastParams)
+                local params = RaycastParams.new()
+                params.FilterDescendantsInstances = {lp.Character}
+                params.FilterType = Enum.RaycastFilterType.Exclude
+                local result = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), params)
                 if result and not result.Instance:IsDescendantOf(char) then continue end
             end
 
-            if realDist < shortestDist then
-                shortestDist = realDist
-                closest = targetPart
+            -- Smart Scoring System (Better than distance only)
+            local score = 0
+            score = score - centerDist * 2          -- Prioritize center of screen
+            score = score - distance * 0.8          -- Then distance
+            if targetPart.Name == "Head" then score += 25 end   -- Head bonus
+
+            if score > bestScore then
+                bestScore = score
+                bestTarget = targetPart
             end
         end
 
-        currentTarget = closest
+        currentTarget = bestTarget
+        if currentTarget then lastTarget = currentTarget end
     end
 end)
 
--- ====================== IMPROVED BULLET PREDICTION ======================
+-- ====================== AIMING WITH MEMORY ======================
 RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
 
-    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or not currentTarget then 
+    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then 
         return 
     end
 
-    local aimPos = currentTarget.Position
-    local root = currentTarget.Parent:FindFirstChild("HumanoidRootPart")
+    local target = currentTarget or lastTarget
+    if not target or not target.Parent then return end
+
+    local aimPos = target.Position
+    local root = target.Parent:FindFirstChild("HumanoidRootPart")
 
     if BulletPrediction and root and root.Velocity then
         local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if lpRoot then
-            local distance = (aimPos - lpRoot.Position).Magnitude
-            local travelTime = distance / BulletSpeed
+            local dist = (aimPos - lpRoot.Position).Magnitude
+            local travelTime = dist / BulletSpeed
 
-            -- Advanced Prediction
-            local predictedPos = aimPos + root.Velocity * travelTime
+            local predicted = aimPos + root.Velocity * travelTime
 
-            -- Bullet Drop Compensation (Gravity)
             if BulletDropCompensation then
-                local gravity = workspace.Gravity
-                local drop = 0.5 * gravity * travelTime * travelTime
-                predictedPos = predictedPos + Vector3.new(0, -drop * 0.7, 0)  -- 0.7 is a good tuning factor
+                local gravityDrop = 0.5 * workspace.Gravity * travelTime^2
+                predicted = predicted + Vector3.new(0, -gravityDrop * 0.75, 0)
             end
 
-            aimPos = predictedPos
+            aimPos = predicted
         end
     end
 
-    local targetCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Smoothness)
+    local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
+    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 4)) -- Prevents over-smoothing
 end)
 
-print("✅ Combat Tab Updated - Bullet Prediction Improved!")
-
+print("✅ Aimbot Majorly Improved - Much Better Locking!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
