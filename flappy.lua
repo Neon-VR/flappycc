@@ -32,7 +32,7 @@ local AimPart = "Head"
 local BulletSpeed = 1500
 
 local currentTarget = nil
-local lastTarget = nil
+local lockedTarget = nil   -- Sticky lock
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -62,12 +62,13 @@ Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", R
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- ====================== SMARTER TARGET SELECTION ======================
+-- ====================== TARGET SELECTION & STICKY LOCK ======================
 task.spawn(function()
     while true do
-        task.wait(0.03) -- Faster scanning = better tracking
+        task.wait(0.04)
 
         if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            lockedTarget = nil
             currentTarget = nil
             continue
         end
@@ -76,6 +77,24 @@ task.spawn(function()
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
+        -- Check if current locked target is still valid
+        if lockedTarget and lockedTarget.Parent then
+            local char = lockedTarget.Parent
+            local humanoid = char:FindFirstChild("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+
+            if humanoid and humanoid.Health > 0 and root then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+                local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+
+                if onScreen and centerDist <= AimFOV then
+                    currentTarget = lockedTarget
+                    continue  -- Keep locked
+                end
+            end
+        end
+
+        -- Find new target if no valid lock
         local bestTarget = nil
         local bestScore = -math.huge
 
@@ -86,7 +105,9 @@ task.spawn(function()
             local char = plr.Character
             local targetPart = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
             local root = char:FindFirstChild("HumanoidRootPart")
-            if not targetPart or not root then continue end
+            local hum = char:FindFirstChild("Humanoid")
+
+            if not targetPart or not root or not hum or hum.Health <= 0 then continue end
 
             local distance = (targetPart.Position - lpRoot.Position).Magnitude
             if distance > MaxAimDistance then continue end
@@ -97,20 +118,20 @@ task.spawn(function()
             local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
-            -- Visibility Check
+            -- VisCheck
             if VisCheck then
                 local params = RaycastParams.new()
                 params.FilterDescendantsInstances = {lp.Character}
                 params.FilterType = Enum.RaycastFilterType.Exclude
-                local result = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), params)
+                local result = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, params)
                 if result and not result.Instance:IsDescendantOf(char) then continue end
             end
 
-            -- Smart Scoring System (Better than distance only)
+            -- Scoring
             local score = 0
-            score = score - centerDist * 2          -- Prioritize center of screen
-            score = score - distance * 0.8          -- Then distance
-            if targetPart.Name == "Head" then score += 25 end   -- Head bonus
+            score -= centerDist * 2.2
+            score -= distance * 0.7
+            if targetPart.Name == "Head" then score += 30 end
 
             if score > bestScore then
                 bestScore = score
@@ -118,12 +139,14 @@ task.spawn(function()
             end
         end
 
-        currentTarget = bestTarget
-        if currentTarget then lastTarget = currentTarget end
+        if bestTarget then
+            lockedTarget = bestTarget
+            currentTarget = bestTarget
+        end
     end
 end)
 
--- ====================== AIMING WITH MEMORY ======================
+-- ====================== AIMING ======================
 RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
@@ -132,7 +155,7 @@ RunService.RenderStepped:Connect(function()
         return 
     end
 
-    local target = currentTarget or lastTarget
+    local target = currentTarget
     if not target or not target.Parent then return end
 
     local aimPos = target.Position
@@ -147,8 +170,8 @@ RunService.RenderStepped:Connect(function()
             local predicted = aimPos + root.Velocity * travelTime
 
             if BulletDropCompensation then
-                local gravityDrop = 0.5 * workspace.Gravity * travelTime^2
-                predicted = predicted + Vector3.new(0, -gravityDrop * 0.75, 0)
+                local gravityDrop = 0.5 * workspace.Gravity * travelTime * travelTime
+                predicted += Vector3.new(0, -gravityDrop * 0.75, 0)
             end
 
             aimPos = predicted
@@ -156,10 +179,10 @@ RunService.RenderStepped:Connect(function()
     end
 
     local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 4)) -- Prevents over-smoothing
+    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
 end)
 
-print("✅ Aimbot Majorly Improved - Much Better Locking!")
+print("✅ Sticky Aimbot Lock Fixed & Improved!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
