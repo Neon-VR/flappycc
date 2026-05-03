@@ -36,9 +36,6 @@ local GameFOV = 70
 local currentTarget = nil
 local lockedTarget = nil
 
-local AimbotKey = Enum.UserInputType.MouseButton2   -- Default: Right Mouse Button
-local SilentAimKey = Enum.KeyCode.R                 -- Default: R Key
-
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -53,33 +50,8 @@ FOVCircle.Filled = false
 FOVCircle.Visible = false
 
 -- ====================== UI ======================
-Combat:CreateToggle({
-    Name = "AI Aimbot",
-    CurrentValue = false,
-    Callback = function(v) AimbotEnabled = v end
-})
-
-Combat:CreateKeybind({
-    Name = "Aimbot Keybind",
-    CurrentKeybind = "MouseButton2",
-    HoldToUse = true,
-    Callback = function(newKey)
-        -- Rayfield handles it internally
-    end
-})
-
-Combat:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = false,
-    Callback = function(v) SilentAimEnabled = v end
-})
-
-Combat:CreateKeybind({
-    Name = "Silent Aim Keybind",
-    CurrentKeybind = "R",
-    HoldToUse = true,
-    Callback = function() end
-})
+Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
+Combat:CreateToggle({Name = "Silent Aim", CurrentValue = false, Callback = function(v) SilentAimEnabled = v end})
 
 Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
@@ -95,7 +67,7 @@ Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", R
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- Game FOV
+-- Game FOV Changer
 Combat:CreateInput({
     Name = "Game FOV (30-120)",
     PlaceholderText = "70",
@@ -109,7 +81,7 @@ Combat:CreateInput({
     end
 })
 
--- ====================== TARGET SELECTION ======================
+-- ====================== TARGET SELECTION (Better Dead Check) ======================
 task.spawn(function()
     while true do
         task.wait(0.03)
@@ -120,27 +92,40 @@ task.spawn(function()
             continue
         end
 
+        if AimbotEnabled and not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+            lockedTarget = nil
+            currentTarget = nil
+            continue
+        end
+
         local lp = game.Players.LocalPlayer
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
-        -- Check locked target
+        -- Validate locked target (Stronger death check)
         if lockedTarget and lockedTarget.Parent then
             local char = lockedTarget.Parent
             local hum = char:FindFirstChild("Humanoid")
             local root = char:FindFirstChild("HumanoidRootPart")
-            if hum and hum.Health > 0 and root then
-                local pos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
-                local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                if onScreen and centerDist <= AimFOV + 25 then
-                    currentTarget = lockedTarget
-                    continue
-                end
+
+            if not hum or hum.Health <= 0 or not root then
+                lockedTarget = nil
+                currentTarget = nil
+                continue
+            end
+
+            local screenPos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+            local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+
+            if onScreen and centerDist <= AimFOV + 25 then
+                currentTarget = lockedTarget
+                continue
             end
         end
 
         -- Find new target
         local bestTarget, bestScore = nil, -math.huge
+
         for _, plr in ipairs(game.Players:GetPlayers()) do
             if plr == lp or not plr.Character then continue end
             if not TargetTeammates and plr.Team == lp.Team then continue end
@@ -150,6 +135,7 @@ task.spawn(function()
             local root = char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChild("Humanoid")
 
+            -- STRONG DEAD CHECK
             if not targetPart or not root or not hum or hum.Health <= 0 then continue end
 
             local distance = (targetPart.Position - lpRoot.Position).Magnitude
@@ -193,6 +179,14 @@ RunService.RenderStepped:Connect(function()
     local target = currentTarget
     if not target or not target.Parent then return end
 
+    -- Extra safety: Stop aiming at dead players
+    local hum = target.Parent:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then
+        currentTarget = nil
+        lockedTarget = nil
+        return
+    end
+
     local aimPos = target.Position
     local root = target.Parent:FindFirstChild("HumanoidRootPart")
 
@@ -210,20 +204,18 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Aimbot (with custom key)
-    if AimbotEnabled and UserInput:IsMouseButtonPressed(AimbotKey) or (AimbotKey and UserInput:IsKeyDown(AimbotKey)) then
+    if AimbotEnabled and UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
         Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
     end
 
-    -- Silent Aim (with custom key)
-    if SilentAimEnabled and (UserInput:IsMouseButtonPressed(SilentAimKey) or UserInput:IsKeyDown(SilentAimKey)) then
+    if SilentAimEnabled then
         local mouse = game.Players.LocalPlayer:GetMouse()
         mouse.Target = target
     end
 end)
 
-print("✅ Combat Tab Updated with Custom Keybinds!")
+print("✅ Combat Tab Fixed - No more camera snapping down on death!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
