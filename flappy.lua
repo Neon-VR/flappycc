@@ -1020,6 +1020,231 @@ CrosshairTab:CreateButton({
 })
 
 print("✅ Custom Crosshair Tab Loaded")
+
+-- ====================== MISC TAB ======================
+
+local Misc = Window:CreateTab("Misc", 4483362458)
+
+-- Settings
+
+local AntiAFKEnabled = false
+
+local InfiniteJumpEnabled = false
+
+local NoClipEnabled = false
+
+local ClickTPEnabled = false
+
+local FPSBoostEnabled = false
+
+local AntiAFKConnection = nil
+
+local NoClipConnection = nil
+
+-- ====================== ANTI-AFK ======================
+
+local function StartAntiAFK()
+
+    if AntiAFKConnection then return end
+
+    AntiAFKConnection = game:GetService("RunService").Heartbeat:Connect(function()
+
+        if not AntiAFKEnabled then return end
+
+        local vu = game:GetService("VirtualUser")
+
+        vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+
+        task.wait(0.1)
+
+        vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+
+    end)
+
+end
+
+local function StopAntiAFK()
+
+    if AntiAFKConnection then
+
+        AntiAFKConnection:Disconnect()
+
+        AntiAFKConnection = nil
+
+    end
+
+end
+
+-- ====================== NOCLIP ======================
+
+local function StartNoClip()
+
+    if NoClipConnection then return end
+
+    NoClipConnection = game:GetService("RunService").Stepped:Connect(function()
+
+        if not NoClipEnabled then return end
+
+        local char = game.Players.LocalPlayer.Character
+
+        if char then
+
+            for _, part in pairs(char:GetDescendants()) do
+
+                if part:IsA("BasePart") then
+
+                    part.CanCollide = false
+
+                end
+
+            end
+
+        end
+
+    end)
+
+end
+
+local function StopNoClip()
+
+    if NoClipConnection then
+
+        NoClipConnection:Disconnect()
+
+        NoClipConnection = nil
+
+    end
+
+    local char = game.Players.LocalPlayer.Character
+
+    if char then
+
+        for _, part in pairs(char:GetDescendants()) do
+
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+
+                part.CanCollide = true
+
+            end
+
+        end
+
+    end
+
+end
+
+-- ====================== INFINITE JUMP ======================
+
+game:GetService("UserInputService").JumpRequest:Connect(function()
+
+    if InfiniteJumpEnabled then
+
+        local hum = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+
+    end
+
+end)
+
+-- ====================== CLICK TP ======================
+
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+
+    if ClickTPEnabled and input.UserInputType == Enum.UserInputType.MouseButton2 and game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then
+
+        local mouse = game.Players.LocalPlayer:GetMouse()
+
+        local char = game.Players.LocalPlayer.Character
+
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+
+        if root and mouse.Hit then
+
+            root.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0, 4, 0))
+
+        end
+
+    end
+
+end)
+
+-- ====================== AUTO REJOIN (WITH SCRIPT LOAD) ======================
+
+Misc:CreateButton({
+
+    Name = "Rejoin Server (Auto Load Script)",
+
+    Callback = function()
+
+        local queue_on_teleport = syn and syn.queue_on_teleport or queue_on_teleport or (fluxus and fluxus.queue_on_teleport)
+
+        
+
+        if queue_on_teleport then
+
+            queue_on_teleport([[
+
+                loadstring(game:HttpGet("raw.githubusercontent.com/Neon-VR/flappycc/refs/heads/main/flappy.lua"))()
+
+            ]])
+
+        end
+
+        
+
+        game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+
+    end
+
+})
+
+-- ====================== UI ======================
+
+Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function(v) AntiAFKEnabled = v if v then StartAntiAFK() else StopAntiAFK() end end})
+
+Misc:CreateToggle({Name = "Infinite Jump", CurrentValue = false, Callback = function(v) InfiniteJumpEnabled = v end})
+
+Misc:CreateToggle({Name = "NoClip", CurrentValue = false, Callback = function(v) NoClipEnabled = v if v then StartNoClip() else StopNoClip() end end})
+
+Misc:CreateToggle({Name = "Click TP (Ctrl + Right Click)", CurrentValue = false, Callback = function(v) ClickTPEnabled = v end})
+
+Misc:CreateToggle({Name = "FPS Boost (Low Graphics)", CurrentValue = false, Callback = function(v) FPSBoostEnabled = v if v then settings().Rendering.QualityLevel = 1 game.Lighting.GlobalShadows = false game.Lighting.FogEnd = 999999 else settings().Rendering.QualityLevel = 5 game.Lighting.GlobalShadows = true end end})
+
+Misc:CreateButton({Name = "Normal Rejoin (No Auto-Load)", Callback = function()
+
+    game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer)
+
+end})
+
+Misc:CreateButton({Name = "Server Hop", Callback = function()
+
+    game:GetService("TeleportService"):Teleport(game.PlaceId)
+
+end})
+
+Misc:CreateButton({Name = "Copy Game ID", Callback = function()
+
+    setclipboard(tostring(game.PlaceId))
+
+    print("📋 Game ID Copied!")
+
+end})
+
+Misc:CreateButton({Name = "Remove Fog", Callback = function()
+
+    game.Lighting.FogEnd = 999999
+
+    game.Lighting.FogStart = 999999
+
+end})
+
+Misc:CreateInput({Name = "Set Gravity", PlaceholderText = "196.2", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then workspace.Gravity = num end end})
+
+Misc:CreateButton({Name = "Reset Gravity", Callback = function() workspace.Gravity = 196.2 end})
+
+print("✅ Misc Tab Updated - Auto Rejoin Added!")
+
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 -- ================================
