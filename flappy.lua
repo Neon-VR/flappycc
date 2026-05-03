@@ -907,15 +907,18 @@ local CrosshairTab = Window:CreateTab("Crosshair", 4483362458)
 local DavidStarEnabled = false
 local StarSize = 35
 local StarColor = Color3.fromRGB(0, 255, 255)
-local StarObjects = {}
 
+local StarObjects = {}
+local CrosshairConnection = nil
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 
--- Create / Update David Star
+-- Create David Star
 local function CreateDavidStar()
-    -- Clear old
-    for _, obj in pairs(StarObjects) do obj:Remove() end
+    -- Full clear
+    for _, obj in pairs(StarObjects) do
+        if obj and obj.Remove then obj:Remove() end
+    end
     table.clear(StarObjects)
 
     local centerX = Camera.ViewportSize.X / 2
@@ -927,7 +930,7 @@ local function CreateDavidStar()
     star1.PointB = Vector2.new(centerX - StarSize * 0.866, centerY + StarSize * 0.5)
     star1.PointC = Vector2.new(centerX + StarSize * 0.866, centerY + StarSize * 0.5)
     star1.Color = StarColor
-    star1.Thickness = 2.5
+    star1.Thickness = 2.8
     star1.Transparency = 1
     star1.Filled = false
     table.insert(StarObjects, star1)
@@ -938,7 +941,7 @@ local function CreateDavidStar()
     star2.PointB = Vector2.new(centerX - StarSize * 0.866, centerY - StarSize * 0.5)
     star2.PointC = Vector2.new(centerX + StarSize * 0.866, centerY - StarSize * 0.5)
     star2.Color = StarColor
-    star2.Thickness = 2.5
+    star2.Thickness = 2.8
     star2.Transparency = 1
     star2.Filled = false
     table.insert(StarObjects, star2)
@@ -953,8 +956,6 @@ local function CreateDavidStar()
     table.insert(StarObjects, centerDot)
 end
 
-local CrosshairConnection = nil
-
 local function StartDavidStar()
     if CrosshairConnection then return end
 
@@ -966,8 +967,7 @@ local function StartDavidStar()
         local centerX = Camera.ViewportSize.X / 2
         local centerY = Camera.ViewportSize.Y / 2
 
-        if #StarObjects >= 3 then
-            -- Update Triangles
+        if #StarObjects == 3 then
             StarObjects[1].PointA = Vector2.new(centerX, centerY - StarSize)
             StarObjects[1].PointB = Vector2.new(centerX - StarSize * 0.866, centerY + StarSize * 0.5)
             StarObjects[1].PointC = Vector2.new(centerX + StarSize * 0.866, centerY + StarSize * 0.5)
@@ -976,18 +976,25 @@ local function StartDavidStar()
             StarObjects[2].PointB = Vector2.new(centerX - StarSize * 0.866, centerY - StarSize * 0.5)
             StarObjects[2].PointC = Vector2.new(centerX + StarSize * 0.866, centerY - StarSize * 0.5)
 
-            -- Update Center Dot
             StarObjects[3].Position = Vector2.new(centerX, centerY)
         end
     end)
 end
 
 local function StopDavidStar()
+    DavidStarEnabled = false  -- Force flag off
+
     if CrosshairConnection then
         CrosshairConnection:Disconnect()
         CrosshairConnection = nil
     end
-    for _, obj in pairs(StarObjects) do obj:Remove() end
+
+    -- Safe & complete cleanup
+    for _, obj in pairs(StarObjects) do
+        if obj and typeof(obj.Remove) == "function" then
+            pcall(function() obj:Remove() end)
+        end
+    end
     table.clear(StarObjects)
 end
 
@@ -1013,7 +1020,7 @@ CrosshairTab:CreateSlider({
     Callback = function(v)
         StarSize = v
         if DavidStarEnabled then
-            CreateDavidStar() -- Refresh with new size
+            CreateDavidStar()
         end
     end
 })
@@ -1024,7 +1031,7 @@ CrosshairTab:CreateColorPicker({
     Callback = function(v)
         StarColor = v
         if DavidStarEnabled then
-            CreateDavidStar() -- Refresh color
+            CreateDavidStar()
         end
     end
 })
@@ -1054,14 +1061,13 @@ CrosshairTab:CreateButton({
     Callback = function()
         if DavidStarEnabled then
             StopDavidStar()
-            task.wait(0.05)
+            task.wait(0.08)
             StartDavidStar()
         end
     end
 })
 
-print("✅ Custom Crosshair Tab Improved (Size + Color Customizable)")
-print("✅ Custom Crosshair Tab Loaded")
+print("✅ Crosshair Fully Fixed - Stable On/Off + Settings Change")
 
 -- ====================== MISC TAB ======================
 
