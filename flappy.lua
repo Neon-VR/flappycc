@@ -18,255 +18,1020 @@ local VirtualUser = game:GetService("VirtualUser")
 -- ====================== COMBAT TAB ======================
 local Combat = Window:CreateTab("Combat", 4483362458)
 
+-- Settings
 local AimbotEnabled = false
 local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = false
+local BulletPrediction = false
 local Smoothness = 12
 local AimFOV = 120
+local MaxAimDistance = 300     -- ← NEW
 local AimPart = "Head"
-local BulletPrediction = false
 local BulletSpeed = 1500
 
 local currentTarget = nil
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInput = game:GetService("UserInputService")
 
+-- FOV Circle
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
 FOVCircle.NumSides = 100
 FOVCircle.Color = Color3.fromRGB(0, 255, 255)
-FOVCircle.Transparency = 0.8
+FOVCircle.Transparency = 0.75
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
-Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
-Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
-Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
-Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = false, Callback = function(v) TargetNPCs = v end})
-Combat:CreateToggle({Name = "Bullet Prediction", CurrentValue = false, Callback = function(v) BulletPrediction = v end})
+-- ====================== UI ELEMENTS ======================
+Combat:CreateToggle({
+    Name = "AI Aimbot (Hold Right Click)",
+    CurrentValue = false,
+    Callback = function(v) AimbotEnabled = v end
+})
 
-Combat:CreateInput({Name = "Aimbot Smoothness (1-25)", PlaceholderText = "12", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then Smoothness = math.clamp(num, 1, 25) end end})
-Combat:CreateInput({Name = "Aimbot FOV (30-400)", PlaceholderText = "120", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then AimFOV = math.clamp(num, 30, 400) end end})
-Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then BulletSpeed = math.clamp(num, 500, 5000) end end})
-Combat:CreateDropdown({Name = "Aim Part", Options = {"Head","UpperTorso","HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
-Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
+Combat:CreateToggle({
+    Name = "VisCheck (Only Visible Players)",
+    CurrentValue = true,
+    Callback = function(v) VisCheck = v end
+})
 
+Combat:CreateToggle({
+    Name = "Target Teammates",
+    CurrentValue = false,
+    Callback = function(v) TargetTeammates = v end
+})
+
+Combat:CreateToggle({
+    Name = "Target NPCs/Bots",
+    CurrentValue = false,
+    Callback = function(v) TargetNPCs = v end
+})
+
+Combat:CreateToggle({
+    Name = "Bullet Prediction",
+    CurrentValue = false,
+    Callback = function(v) BulletPrediction = v end
+})
+
+Combat:CreateInput({
+    Name = "Max Aim Distance (studs)",
+    PlaceholderText = "300",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            MaxAimDistance = math.clamp(num, 50, 2000)
+        end
+    end
+})
+
+Combat:CreateInput({
+    Name = "Aimbot Smoothness (1-25)",
+    PlaceholderText = "12",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then Smoothness = math.clamp(num, 1, 25) end
+    end
+})
+
+Combat:CreateInput({
+    Name = "Aimbot FOV (30-400)",
+    PlaceholderText = "120",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then AimFOV = math.clamp(num, 30, 400) end
+    end
+})
+
+Combat:CreateInput({
+    Name = "Bullet Speed (studs/s)",
+    PlaceholderText = "1500",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then BulletSpeed = math.clamp(num, 500, 5000) end
+    end
+})
+
+Combat:CreateDropdown({
+    Name = "Aim Part",
+    Options = {"Head", "UpperTorso", "HumanoidRootPart"},
+    CurrentOption = {"Head"},
+    Callback = function(opt) AimPart = opt[1] end
+})
+
+Combat:CreateToggle({
+    Name = "Show FOV Circle",
+    CurrentValue = false,
+    Callback = function(v) FOVCircle.Visible = v end
+})
+
+-- ====================== TARGET FINDING LOOP ======================
 task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(0.08) -- Slightly faster & smoother
+
         if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
             currentTarget = nil
             continue
         end
 
         local lp = game.Players.LocalPlayer
-        local closest, dist = nil, math.huge
+        local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        if not lpRoot then continue end
+
+        local closest, shortestDist = nil, math.huge
 
         for _, plr in ipairs(game.Players:GetPlayers()) do
             if plr == lp or not plr.Character then continue end
             if not TargetTeammates and plr.Team == lp.Team then continue end
 
             local char = plr.Character
-            local part = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
-            if not part then continue end
+            local targetPart = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
+            if not targetPart then continue end
 
-            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not root then continue end
+
+            -- Max Distance Check
+            local realDist = (targetPart.Position - lpRoot.Position).Magnitude
+            if realDist > MaxAimDistance then continue end
+
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
             if not onScreen then continue end
-            local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+
+            local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
+            -- Visibility Check
             if VisCheck then
-                local ray = Ray.new(Camera.CFrame.Position, (part.Position - Camera.CFrame.Position).Unit * 1000)
-                local hit = workspace:FindPartOnRayWithIgnoreList(ray, {lp.Character})
-                if hit and not hit:IsDescendantOf(char) then continue end
+                local origin = Camera.CFrame.Position
+                local direction = (targetPart.Position - origin)
+                local raycastParams = RaycastParams.new()
+                raycastParams.FilterDescendantsInstances = {lp.Character}
+                raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+                local result = workspace:Raycast(origin, direction, raycastParams)
+                if result and not result.Instance:IsDescendantOf(char) then
+                    continue
+                end
             end
 
-            local realDist = (part.Position - lp.Character.HumanoidRootPart.Position).Magnitude
-            if realDist < dist then dist = realDist; closest = part end
+            if realDist < shortestDist then
+                shortestDist = realDist
+                closest = targetPart
+            end
         end
 
         currentTarget = closest
     end
 end)
 
+-- ====================== AIMING LOOP ======================
 RunService.RenderStepped:Connect(function()
+    -- Update FOV Circle
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
 
-    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or not currentTarget then return end
+    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) or not currentTarget then 
+        return 
+    end
 
     local aimPos = currentTarget.Position
 
+    -- Bullet Prediction
     if BulletPrediction then
         local root = currentTarget.Parent:FindFirstChild("HumanoidRootPart")
         if root and root.Velocity then
-            local travelTime = (currentTarget.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude / BulletSpeed
-            aimPos = aimPos + root.Velocity * travelTime
+            local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if lpRoot then
+                local distance = (currentTarget.Position - lpRoot.Position).Magnitude
+                local travelTime = distance / BulletSpeed
+                aimPos = aimPos + (root.Velocity * travelTime)
+            end
         end
     end
 
-    local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / Smoothness)
+    local targetCFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Smoothness)
 end)
+
+print("✅ Combat Tab Loaded with Max Aim Distance")
 
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
+-- Settings
 local KillAllEnabled = false
 local KillAllLoop = false
+local KillTeammates = false
 local KillSelectedEnabled = false
 local LoopKillSelected = false
+
 local SelectedPlayer = nil
-local killedPlayers = {}
-
-Troll:CreateToggle({Name = "Kill All", CurrentValue = false, Callback = function(v) KillAllEnabled = v end})
-Troll:CreateToggle({Name = "Kill All Loop", CurrentValue = false, Callback = function(v) KillAllLoop = v end})
-
-local playerList = {}
-for _, plr in ipairs(game.Players:GetPlayers()) do
-    if plr ~= game.Players.LocalPlayer then table.insert(playerList, plr.Name) end
-end
-
-Troll:CreateDropdown({Name = "Select Player", Options = playerList, CurrentOption = {""}, Callback = function(opt)
-    local plr = game.Players:FindFirstChild(opt[1])
-    SelectedPlayer = plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-end})
-
-Troll:CreateToggle({Name = "Kill Selected Player", CurrentValue = false, Callback = function(v) KillSelectedEnabled = v end})
-Troll:CreateToggle({Name = "Loop Kill Selected Player", CurrentValue = false, Callback = function(v) LoopKillSelected = v end})
-
+local killedPlayers = {}  -- For one-time Kill All
 local trollTarget = nil
 
-RunService.RenderStepped:Connect(function()
-    if KillAllEnabled or KillAllLoop then
-        if not trollTarget or not trollTarget.Parent then
-            for _, plr in ipairs(game.Players:GetPlayers()) do
-                if plr ~= game.Players.LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not killedPlayers[plr] then
-                    trollTarget = plr.Character.HumanoidRootPart
-                    break
-                end
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local UserInput = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+
+-- ====================== UI ======================
+Troll:CreateToggle({
+    Name = "Kill All (Enemies Only)",
+    CurrentValue = false,
+    Callback = function(v) KillAllEnabled = v end
+})
+
+Troll:CreateToggle({
+    Name = "Kill All Loop",
+    CurrentValue = false,
+    Callback = function(v) KillAllLoop = v end
+})
+
+Troll:CreateToggle({
+    Name = "Kill Teammates",
+    CurrentValue = false,
+    Callback = function(v) KillTeammates = v end
+})
+
+-- Player Dropdown (Auto-updates)
+local playerList = {}
+for _, plr in ipairs(game.Players:GetPlayers()) do
+    if plr ~= game.Players.LocalPlayer then
+        table.insert(playerList, plr.Name)
+    end
+end
+
+Troll:CreateDropdown({
+    Name = "Select Player",
+    Options = playerList,
+    CurrentOption = {""},
+    Callback = function(opt)
+        local plrName = opt[1]
+        if plrName and plrName ~= "" then
+            local plr = game.Players:FindFirstChild(plrName)
+            if plr and plr.Character then
+                SelectedPlayer = plr.Character:FindFirstChild("HumanoidRootPart")
             end
-            if not trollTarget then
-                if KillAllLoop then killedPlayers = {} else trollTarget = nil end
+        else
+            SelectedPlayer = nil
+        end
+    end
+})
+
+Troll:CreateToggle({
+    Name = "Kill Selected Player",
+    CurrentValue = false,
+    Callback = function(v) KillSelectedEnabled = v end
+})
+
+Troll:CreateToggle({
+    Name = "Loop Kill Selected Player",
+    CurrentValue = false,
+    Callback = function(v) LoopKillSelected = v end
+})
+
+-- ====================== MAIN TROLL LOOP ======================
+RunService.RenderStepped:Connect(function()
+    trollTarget = nil
+
+    local lp = game.Players.LocalPlayer
+    local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+    if not lpRoot then return end
+
+    -- === Kill All Logic ===
+    if KillAllEnabled or KillAllLoop then
+        for _, plr in ipairs(game.Players:GetPlayers()) do
+            if plr == lp then continue end
+            if not plr.Character then continue end
+
+            -- Team Check
+            if not KillTeammates and plr.Team == lp.Team then continue end
+
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then continue end
+
+            if not killedPlayers[plr] then
+                trollTarget = hrp
+                break
             end
         end
-    elseif KillSelectedEnabled or LoopKillSelected then
-        trollTarget = SelectedPlayer
-    else
-        trollTarget = nil
+
+        -- Reset killed list for looping
+        if KillAllLoop and not trollTarget then
+            killedPlayers = {}
+        end
     end
 
+    -- === Kill Selected Player Logic ===
+    if not trollTarget and (KillSelectedEnabled or LoopKillSelected) then
+        trollTarget = SelectedPlayer
+    end
+
+    -- === Execute Troll ===
     if trollTarget and trollTarget.Parent then
-        local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if lpRoot then
-            lpRoot.CFrame = trollTarget.CFrame * CFrame.new(0, 0, -4) * CFrame.Angles(0, math.rad(180), 0)
+        local targetHum = trollTarget.Parent:FindFirstChild("Humanoid")
+        
+        -- TP Behind Target (Improved)
+        if targetHum and targetHum.Health > 0 then
+            local targetCFrame = trollTarget.CFrame
+            -- Position behind + face them
+            local behindOffset = targetCFrame * CFrame.new(0, 0, 5)  -- 5 studs behind
+            lpRoot.CFrame = behindOffset * CFrame.Angles(0, math.rad(180), 0)
         end
 
+        -- Auto Click (Right Click + Fire)
         if UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            VirtualUser:Button1Down(Vector2.new(0,0), Camera.CFrame)
-            task.wait(0.05)
-            VirtualUser:Button1Up(Vector2.new(0,0), Camera.CFrame)
+            VirtualUser:Button1Down(Vector2.new(0, 0), Camera.CFrame)
+            task.wait(0.03)
+            VirtualUser:Button1Up(Vector2.new(0, 0), Camera.CFrame)
         end
 
-        local hum = trollTarget.Parent:FindFirstChild("Humanoid")
-        if hum and hum.Health <= 0 then
+        -- Mark as killed
+        if targetHum and targetHum.Health <= 0 then
             local plr = game.Players:GetPlayerFromCharacter(trollTarget.Parent)
-            if plr then killedPlayers[plr] = true end
+            if plr then
+                killedPlayers[plr] = true
+            end
             trollTarget = nil
         end
     end
 end)
 
+-- Auto refresh dropdown when players join/leave
+game.Players.PlayerAdded:Connect(function()
+    -- You can refresh dropdown if needed, but Rayfield usually handles it
+end)
+
+print("✅ Troll Tab Loaded - TP Behind + Team Control")
 -- ====================== ESP TAB ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
+-- Settings
 local ESPEnabled = false
+local BoxEnabled = true
+local NameEnabled = true
+local TracerEnabled = true
+local ChamsEnabled = false
 local MaxTracerDistance = 200
 
-ESPTab:CreateToggle({Name = "Master ESP Toggle", CurrentValue = false, Callback = function(v) ESPEnabled = v end})
-ESPTab:CreateToggle({Name = "2D Box ESP", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Name + Health + Distance", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Line Tracers", CurrentValue = true, Callback = function() end})
-ESPTab:CreateToggle({Name = "Cyan Chams", CurrentValue = false, Callback = function() end})
-ESPTab:CreateInput({Name = "Max Tracer Distance (studs)", PlaceholderText = "200", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxTracerDistance = math.clamp(num, 50, 500) end end})
+local ESPData = {} -- player → {Box, Tracer, Billboard, Highlight}
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
 
-local ESPData = {}
+local ESPConnection = nil
 
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if not ESPEnabled then
-            for _, data in pairs(ESPData) do
-                if data.Box then data.Box.Visible = false end
-                if data.Tracer then data.Tracer.Visible = false end
-            end
-            continue
+-- ====================== CLEANUP ======================
+local function CleanupPlayer(player)
+    local data = ESPData[player]
+    if not data then return end
+
+    if data.Box then data.Box:Remove() end
+    if data.Tracer then data.Tracer:Remove() end
+    if data.Billboard then data.Billboard:Destroy() end
+    if data.Highlight then data.Highlight:Destroy() end
+
+    ESPData[player] = nil
+end
+
+local function FullCleanup()
+    for player in pairs(ESPData) do
+        CleanupPlayer(player)
+    end
+    table.clear(ESPData)
+end
+
+-- ====================== ESP UPDATE FUNCTIONS ======================
+local function UpdateBox(data, screenPos, height)
+    if not BoxEnabled then
+        if data.Box then data.Box.Visible = false end
+        return
+    end
+
+    if not data.Box then
+        data.Box = Drawing.new("Square")
+        data.Box.Filled = false
+        data.Box.Thickness = 2
+        data.Box.Transparency = 0.85
+    end
+
+    local size = Vector2.new(height * 0.6, height * 1.85)
+    data.Box.Size = size
+    data.Box.Position = Vector2.new(screenPos.X - size.X/2, screenPos.Y - size.Y/2)
+    data.Box.Color = Color3.fromRGB(0, 255, 255)
+    data.Box.Visible = true
+end
+
+local function UpdateTracer(data, screenPos, distance)
+    if not TracerEnabled then
+        if data.Tracer then data.Tracer.Visible = false end
+        return
+    end
+
+    if not data.Tracer then
+        data.Tracer = Drawing.new("Line")
+        data.Tracer.Thickness = 1.6
+        data.Tracer.Transparency = 0.75
+    end
+
+    data.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    data.Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+    data.Tracer.Color = Color3.fromRGB(0, 255, 100)
+    data.Tracer.Visible = distance <= MaxTracerDistance
+end
+
+local function UpdateNameTag(data, player, char, distance)
+    if not NameEnabled then
+        if data.Billboard then 
+            data.Billboard.Enabled = false 
         end
+        return
+    end
+
+    local head = char:FindFirstChild("Head")
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not head or not humanoid then 
+        if data.Billboard then data.Billboard.Enabled = false end
+        return 
+    end
+
+    -- Create BillboardGui + TextLabel if it doesn't exist
+    if not data.Billboard then
+        data.Billboard = Instance.new("BillboardGui")
+        data.Billboard.Name = "flappyESP"
+        data.Billboard.Adornee = head
+        data.Billboard.Size = UDim2.new(0, 240, 0, 90)
+        data.Billboard.StudsOffset = Vector3.new(0, 3.8, 0)
+        data.Billboard.AlwaysOnTop = true
+        data.Billboard.LightInfluence = 0
+        data.Billboard.ResetOnSpawn = false
+
+        local txt = Instance.new("TextLabel")
+        txt.Name = "Text"
+        txt.BackgroundTransparency = 1
+        txt.TextScaled = true
+        txt.Font = Enum.Font.GothamBold
+        txt.TextStrokeTransparency = 0.1
+        txt.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        txt.TextColor3 = Color3.fromRGB(0, 255, 255)
+        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.Parent = data.Billboard
+    end
+
+    -- Ensure it's attached to the head
+    if data.Billboard.Parent ~= head then
+        data.Billboard.Parent = head
+    end
+
+    -- Update text
+    local health = math.floor(humanoid.Health + 0.5)
+    data.Billboard.Text.Text = string.format("%s\n[%d HP]\n%d studs", player.Name, health, math.floor(distance))
+    data.Billboard.Enabled = true
+end
+
+local function UpdateChams(char)
+    if not ChamsEnabled then return end
+    if char:FindFirstChild("flappyChams") then return end
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "flappyChams"
+    highlight.FillColor = Color3.fromRGB(0, 255, 255)
+    highlight.OutlineColor = Color3.fromRGB(0, 200, 255)
+    highlight.FillTransparency = 0.6
+    highlight.OutlineTransparency = 0.2
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = char
+end
+
+-- ====================== MAIN LOOP ======================
+local function StartESP()
+    if ESPConnection then return end
+
+    ESPConnection = RunService.Heartbeat:Connect(function()
+        if not ESPEnabled then return end
 
         local lp = game.Players.LocalPlayer
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        if not lpRoot then return end
 
         for _, player in ipairs(game.Players:GetPlayers()) do
-            if player == lp or not player.Character then continue end
+            if player == lp then continue end
+
             local char = player.Character
+            if not char then
+                CleanupPlayer(player)
+                continue
+            end
+
             local root = char:FindFirstChild("HumanoidRootPart")
-            if not root or not lpRoot then continue end
+            if not root then
+                CleanupPlayer(player)
+                continue
+            end
+
+            if not ESPData[player] then
+                ESPData[player] = {}
+            end
+            local data = ESPData[player]
 
             local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-            local distance = (root.Position - lpRoot.Position).Magnitude
-            if not onScreen then continue end
-
-            local box = ESPData[player] and ESPData[player].Box or Drawing.new("Square")
-            if not ESPData[player] then ESPData[player] = {} end
-            ESPData[player].Box = box
-            local height = (Camera:WorldToViewportPoint(root.Position + Vector3.new(0,3,0)).Y - Camera:WorldToViewportPoint(root.Position - Vector3.new(0,3,0)).Y)
-            box.Size = Vector2.new(height * 0.6, height * 1.8)
-            box.Position = Vector2.new(screenPos.X - box.Size.X/2, screenPos.Y - box.Size.Y/2)
-            box.Color = Color3.fromRGB(0, 255, 255)
-            box.Thickness = 2
-            box.Transparency = 0.4
-            box.Filled = false
-            box.Visible = true
-
-            local tracer = ESPData[player].Tracer or Drawing.new("Line")
-            ESPData[player].Tracer = tracer
-            tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-            tracer.Color = Color3.fromRGB(0, 255, 100)
-            tracer.Thickness = 1.5
-            tracer.Transparency = 0.7
-            tracer.Visible = (distance <= MaxTracerDistance)
-
-            local head = char:FindFirstChild("Head")
-            if head then
-                local bg = head:FindFirstChild("flappyESP") or Instance.new("BillboardGui")
-                bg.Name = "flappyESP"
-                bg.Adornee = head
-                bg.Size = UDim2.new(0, 220, 0, 60)
-                bg.StudsOffset = Vector3.new(0, 3.5, 0)
-                bg.AlwaysOnTop = true
-                local txt = bg:FindFirstChild("Text") or Instance.new("TextLabel")
-                txt.Text = player.Name .. "\n[" .. math.floor(char.Humanoid.Health) .. "]" .. "\n" .. math.floor(distance) .. " studs"
-                txt.TextColor3 = Color3.fromRGB(0, 255, 255)
-                txt.TextStrokeTransparency = 0
-                txt.TextScaled = true
-                txt.BackgroundTransparency = 1
-                txt.Parent = bg
-                bg.Parent = head
+            if not onScreen then
+                if data.Box then data.Box.Visible = false end
+                if data.Tracer then data.Tracer.Visible = false end
+                if data.Billboard then data.Billboard.Enabled = false end
+                continue
             end
+
+            local distance = (root.Position - lpRoot.Position).Magnitude
+
+            -- Calculate box height
+            local top = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
+            local bottom = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+            local height = top.Y - bottom.Y
+
+            UpdateBox(data, screenPos, height)
+            UpdateTracer(data, screenPos, distance)
+            UpdateNameTag(data, player, char, distance)
+            UpdateChams(char)
+        end
+    end)
+end
+
+local function StopESP()
+    if ESPConnection then
+        ESPConnection:Disconnect()
+        ESPConnection = nil
+    end
+    FullCleanup()
+end
+
+-- ====================== TOGGLES ======================
+ESPTab:CreateToggle({
+    Name = "Master ESP Toggle",
+    CurrentValue = false,
+    Callback = function(v)
+        ESPEnabled = v
+        if v then
+            StartESP()
+        else
+            StopESP()
+        end
+    end
+})
+
+ESPTab:CreateToggle({
+    Name = "2D Box ESP",
+    CurrentValue = true,
+    Callback = function(v) BoxEnabled = v end
+})
+
+ESPTab:CreateToggle({
+    Name = "Name + Health + Distance",
+    CurrentValue = true,
+    Callback = function(v) NameEnabled = v end
+})
+
+ESPTab:CreateToggle({
+    Name = "Line Tracers",
+    CurrentValue = true,
+    Callback = function(v) TracerEnabled = v end
+})
+
+ESPTab:CreateToggle({
+    Name = "Cyan Chams",
+    CurrentValue = false,
+    Callback = function(v)
+        ChamsEnabled = v
+        if not v then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Highlight") and obj.Name == "flappyChams" then
+                    obj:Destroy()
+                end
+            end
+        end
+    end
+})
+
+ESPTab:CreateInput({
+    Name = "Max Tracer Distance (studs)",
+    PlaceholderText = "200",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            MaxTracerDistance = math.clamp(num, 50, 1000)
+        end
+    end
+})
+
+-- Auto Cleanup
+game.Players.PlayerRemoving:Connect(function(player)
+    CleanupPlayer(player)
+end)
+
+print("✅ Full ESP Tab Loaded - Name Tags Fixed!")
+-- ====================== MOVEMENT ======================
+local Movement = Window:CreateTab("Movement", 4483362458)
+
+-- Settings
+local WalkSpeedEnabled = false
+local JumpPowerEnabled = false
+local InfiniteJumpEnabled = false
+local NoClipEnabled = false
+local FlyEnabled = false
+local BhopEnabled = false
+local SpeedMultiplierEnabled = false
+
+local CustomWalkSpeed = 50
+local CustomJumpPower = 50
+local FlySpeed = 50
+local SpeedMultiplier = 1.5
+
+local FlyConnection = nil
+local NoClipConnection = nil
+
+local lp = game.Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Apply WalkSpeed & JumpPower
+local function ApplyMovement()
+    local char = lp.Character
+    if not char then return end
+    local hum = char:FindFirstChild("Humanoid")
+    if hum then
+        if WalkSpeedEnabled then 
+            hum.WalkSpeed = CustomWalkSpeed 
+        end
+        if JumpPowerEnabled then 
+            hum.JumpPower = CustomJumpPower 
+        end
+    end
+end
+
+-- ====================== INFINITE JUMP ======================
+game:GetService("UserInputService").JumpRequest:Connect(function()
+    if InfiniteJumpEnabled then
+        local hum = lp.Character and lp.Character:FindFirstChild("Humanoid")
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end
 end)
 
--- ====================== MOVEMENT ======================
-local Movement = Window:CreateTab("Movement", 4483362458)
-Movement:CreateInput({Name = "WalkSpeed (0-1000)", PlaceholderText = "16", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = num end end end})
-Movement:CreateInput({Name = "JumpPower (0-1000)", PlaceholderText = "50", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then num = math.clamp(num, 0, 1000) local char = game.Players.LocalPlayer.Character if char and char:FindFirstChild("Humanoid") then char.Humanoid.JumpPower = num end end end})
+-- ====================== BHOP ======================
+game:GetService("RunService").Heartbeat:Connect(function()
+    if not BhopEnabled then return end
+    local hum = lp.Character and lp.Character:FindFirstChild("Humanoid")
+    if hum and game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
 
--- ====================== MISC ======================
-local Misc = Window:CreateTab("Misc", 4483362458)
-Misc:CreateToggle({Name = "Anti-AFK", CurrentValue = false, Callback = function() end})
-Misc:CreateButton({Name = "Rejoin Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, game.Players.LocalPlayer) end})
+-- ====================== NOCLIP ======================
+local function StartNoClip()
+    if NoClipConnection then return end
+    NoClipConnection = game:GetService("RunService").Stepped:Connect(function()
+        if not NoClipEnabled then return end
+        local char = lp.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
 
+local function StopNoClip()
+    if NoClipConnection then
+        NoClipConnection:Disconnect()
+        NoClipConnection = nil
+    end
+    local char = lp.Character
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- ====================== FLY ======================
+local function StartFly()
+    if FlyConnection then return end
+
+    local bodyVelocity = Instance.new("BodyVelocity")
+    local bodyGyro = Instance.new("BodyGyro")
+    bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bodyGyro.P = 12500
+
+    FlyConnection = game:GetService("RunService").RenderStepped:Connect(function()
+        if not FlyEnabled then return end
+        local char = lp.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        bodyVelocity.Parent = root
+        bodyGyro.Parent = root
+
+        local moveDirection = Vector3.new(0, 0, 0)
+        local UIS = game:GetService("UserInputService")
+
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDirection += Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDirection -= Camera.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDirection -= Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDirection += Camera.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.E) or UIS:IsKeyDown(Enum.KeyCode.Space) then moveDirection += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.Q) then moveDirection -= Vector3.new(0,1,0) end
+
+        bodyVelocity.Velocity = moveDirection.Unit * FlySpeed
+        bodyGyro.CFrame = Camera.CFrame
+    end)
+end
+
+local function StopFly()
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+    local char = lp.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        local root = char.HumanoidRootPart
+        for _, v in pairs(root:GetChildren()) do
+            if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+        end
+    end
+end
+
+-- ====================== SPEED MULTIPLIER ======================
+game:GetService("RunService").Heartbeat:Connect(function()
+    if not SpeedMultiplierEnabled then return end
+    local char = lp.Character
+    local hum = char and char:FindFirstChild("Humanoid")
+    if hum then
+        hum.WalkSpeed = CustomWalkSpeed * SpeedMultiplier
+    end
+end)
+
+-- ====================== UI ======================
+Movement:CreateToggle({
+    Name = "Enable WalkSpeed",
+    CurrentValue = false,
+    Callback = function(v) WalkSpeedEnabled = v; ApplyMovement() end
+})
+
+Movement:CreateInput({
+    Name = "WalkSpeed Value",
+    PlaceholderText = "50",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            CustomWalkSpeed = math.clamp(num, 0, 1000)
+            if WalkSpeedEnabled then ApplyMovement() end
+        end
+    end
+})
+
+Movement:CreateToggle({
+    Name = "Speed Multiplier",
+    CurrentValue = false,
+    Callback = function(v) SpeedMultiplierEnabled = v end
+})
+
+Movement:CreateInput({
+    Name = "Speed Multiplier (x)",
+    PlaceholderText = "1.5",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            SpeedMultiplier = math.clamp(num, 0.5, 10)
+        end
+    end
+})
+
+Movement:CreateToggle({
+    Name = "Enable JumpPower",
+    CurrentValue = false,
+    Callback = function(v) JumpPowerEnabled = v; ApplyMovement() end
+})
+
+Movement:CreateInput({
+    Name = "JumpPower Value",
+    PlaceholderText = "50",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            CustomJumpPower = math.clamp(num, 0, 1000)
+            if JumpPowerEnabled then ApplyMovement() end
+        end
+    end
+})
+
+Movement:CreateToggle({
+    Name = "Infinite Jump",
+    CurrentValue = false,
+    Callback = function(v) InfiniteJumpEnabled = v end
+})
+
+Movement:CreateToggle({
+    Name = "Bhop (Hold Space)",
+    CurrentValue = false,
+    Callback = function(v) BhopEnabled = v end
+})
+
+Movement:CreateToggle({
+    Name = "NoClip",
+    CurrentValue = false,
+    Callback = function(v)
+        NoClipEnabled = v
+        if v then StartNoClip() else StopNoClip() end
+    end
+})
+
+Movement:CreateToggle({
+    Name = "Fly (WASD + E/Q)",
+    CurrentValue = false,
+    Callback = function(v)
+        FlyEnabled = v
+        if v then StartFly() else StopFly() end
+    end
+})
+
+Movement:CreateInput({
+    Name = "Fly Speed",
+    PlaceholderText = "50",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then FlySpeed = math.clamp(num, 10, 500) end
+    end
+})
+
+-- Respawn Handler
+lp.CharacterAdded:Connect(function()
+    task.wait(0.6)
+    ApplyMovement()
+end)
+
+print("✅ Full Movement Tab Loaded (Speed Multiplier + Bhop Added)")
+-- ====================== CUSTOM CROSSHAIR TAB ======================
+local CrosshairTab = Window:CreateTab("Crosshair", 4483362458)
+
+local DavidStarEnabled = false
+local StarObjects = {}  -- Store all drawing objects
+
+-- Create David Star (Two overlapping triangles)
+local function CreateDavidStar()
+    -- Clear old ones
+    for _, obj in pairs(StarObjects) do
+        obj:Remove()
+    end
+    table.clear(StarObjects)
+
+    local centerX = Camera.ViewportSize.X / 2
+    local centerY = Camera.ViewportSize.Y / 2
+    local size = 35
+
+    -- First Triangle (Pointing Up)
+    local star1 = Drawing.new("Triangle")
+    star1.PointA = Vector2.new(centerX, centerY - size)
+    star1.PointB = Vector2.new(centerX - size * 0.866, centerY + size * 0.5)
+    star1.PointC = Vector2.new(centerX + size * 0.866, centerY + size * 0.5)
+    star1.Color = Color3.fromRGB(0, 255, 255)
+    star1.Thickness = 2.5
+    star1.Transparency = 1
+    star1.Filled = false
+    table.insert(StarObjects, star1)
+
+    -- Second Triangle (Pointing Down)
+    local star2 = Drawing.new("Triangle")
+    star2.PointA = Vector2.new(centerX, centerY + size)
+    star2.PointB = Vector2.new(centerX - size * 0.866, centerY - size * 0.5)
+    star2.PointC = Vector2.new(centerX + size * 0.866, centerY - size * 0.5)
+    star2.Color = Color3.fromRGB(0, 255, 255)
+    star2.Thickness = 2.5
+    star2.Transparency = 1
+    star2.Filled = false
+    table.insert(StarObjects, star2)
+
+    -- Optional Center Dot
+    local centerDot = Drawing.new("Circle")
+    centerDot.Position = Vector2.new(centerX, centerY)
+    centerDot.Radius = 2
+    centerDot.Color = Color3.fromRGB(255, 255, 255)
+    centerDot.Transparency = 1
+    centerDot.Filled = true
+    table.insert(StarObjects, centerDot)
+end
+
+-- Update Star Position every frame (stays centered)
+local CrosshairConnection = nil
+
+local function StartDavidStar()
+    if CrosshairConnection then return end
+
+    CreateDavidStar()
+
+    CrosshairConnection = RunService.RenderStepped:Connect(function()
+        if not DavidStarEnabled then return end
+
+        -- Update position if resolution changes
+        local centerX = Camera.ViewportSize.X / 2
+        local centerY = Camera.ViewportSize.Y / 2
+
+        if #StarObjects >= 3 then
+            local size = 35
+
+            -- Update Triangle 1
+            StarObjects[1].PointA = Vector2.new(centerX, centerY - size)
+            StarObjects[1].PointB = Vector2.new(centerX - size * 0.866, centerY + size * 0.5)
+            StarObjects[1].PointC = Vector2.new(centerX + size * 0.866, centerY + size * 0.5)
+
+            -- Update Triangle 2
+            StarObjects[2].PointA = Vector2.new(centerX, centerY + size)
+            StarObjects[2].PointB = Vector2.new(centerX - size * 0.866, centerY - size * 0.5)
+            StarObjects[2].PointC = Vector2.new(centerX + size * 0.866, centerY - size * 0.5)
+
+            -- Update Center Dot
+            StarObjects[3].Position = Vector2.new(centerX, centerY)
+        end
+    end)
+end
+
+local function StopDavidStar()
+    if CrosshairConnection then
+        CrosshairConnection:Disconnect()
+        CrosshairConnection = nil
+    end
+
+    for _, obj in pairs(StarObjects) do
+        obj:Remove()
+    end
+    table.clear(StarObjects)
+end
+
+-- ====================== UI ======================
+CrosshairTab:CreateToggle({
+    Name = "David Star Crosshair",
+    CurrentValue = false,
+    Callback = function(v)
+        DavidStarEnabled = v
+        if v then
+            StartDavidStar()
+        else
+            StopDavidStar()
+        end
+    end
+})
+
+CrosshairTab:CreateToggle({
+    Name = "Hide In-Game GUI (Clean Screen)",
+    CurrentValue = false,
+    Callback = function(v)
+        if v then
+            -- Hide most player GUIs but keep Rayfield
+            for _, gui in ipairs(game.Players.LocalPlayer.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") and not gui.Name:find("Rayfield") then
+                    gui.Enabled = false
+                end
+            end
+            print("🧹 In-game GUIs Hidden")
+        else
+            -- Restore GUIs
+            for _, gui in ipairs(game.Players.LocalPlayer.PlayerGui:GetChildren()) do
+                if gui:IsA("ScreenGui") then
+                    gui.Enabled = true
+                end
+            end
+            print("🔄 In-game GUIs Restored")
+        end
+    end
+})
+
+CrosshairTab:CreateButton({
+    Name = "Force Refresh Star",
+    Callback = function()
+        if DavidStarEnabled then
+            StopDavidStar()
+            task.wait(0.1)
+            StartDavidStar()
+        end
+    end
+})
+
+print("✅ Custom Crosshair Tab Loaded")
 local Hub = Window:CreateTab("ScriptHub", 4483362458)
 
 -- ================================
