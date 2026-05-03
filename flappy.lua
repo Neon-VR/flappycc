@@ -36,6 +36,9 @@ local GameFOV = 70
 local currentTarget = nil
 local lockedTarget = nil
 
+local AimbotKey = Enum.UserInputType.MouseButton2   -- Default RMB
+local SilentAimKey = Enum.KeyCode.R                 -- Default R
+
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
@@ -50,8 +53,31 @@ FOVCircle.Filled = false
 FOVCircle.Visible = false
 
 -- ====================== UI ======================
-Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
-Combat:CreateToggle({Name = "Silent Aim", CurrentValue = false, Callback = function(v) SilentAimEnabled = v end})
+Combat:CreateToggle({
+    Name = "AI Aimbot",
+    CurrentValue = false,
+    Callback = function(v) AimbotEnabled = v end
+})
+
+Combat:CreateKeybind({
+    Name = "Aimbot Keybind",
+    CurrentKeybind = "MouseButton2",
+    HoldToUse = true,
+    Callback = function() end
+})
+
+Combat:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = false,
+    Callback = function(v) SilentAimEnabled = v end
+})
+
+Combat:CreateKeybind({
+    Name = "Silent Aim Keybind",
+    CurrentKeybind = "R",
+    HoldToUse = true,
+    Callback = function() end
+})
 
 Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
@@ -81,7 +107,7 @@ Combat:CreateInput({
     end
 })
 
--- ====================== TARGET SELECTION (Better Dead Check) ======================
+-- ====================== TARGET SELECTION ======================
 task.spawn(function()
     while true do
         task.wait(0.03)
@@ -92,40 +118,25 @@ task.spawn(function()
             continue
         end
 
-        if AimbotEnabled and not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-            lockedTarget = nil
-            currentTarget = nil
-            continue
-        end
-
         local lp = game.Players.LocalPlayer
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
-        -- Validate locked target (Stronger death check)
         if lockedTarget and lockedTarget.Parent then
             local char = lockedTarget.Parent
             local hum = char:FindFirstChild("Humanoid")
             local root = char:FindFirstChild("HumanoidRootPart")
-
-            if not hum or hum.Health <= 0 or not root then
-                lockedTarget = nil
-                currentTarget = nil
-                continue
-            end
-
-            local screenPos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
-            local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-
-            if onScreen and centerDist <= AimFOV + 25 then
-                currentTarget = lockedTarget
-                continue
+            if hum and hum.Health > 0 and root then
+                local pos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
+                local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                if onScreen and centerDist <= AimFOV + 25 then
+                    currentTarget = lockedTarget
+                    continue
+                end
             end
         end
 
-        -- Find new target
         local bestTarget, bestScore = nil, -math.huge
-
         for _, plr in ipairs(game.Players:GetPlayers()) do
             if plr == lp or not plr.Character then continue end
             if not TargetTeammates and plr.Team == lp.Team then continue end
@@ -135,7 +146,6 @@ task.spawn(function()
             local root = char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChild("Humanoid")
 
-            -- STRONG DEAD CHECK
             if not targetPart or not root or not hum or hum.Health <= 0 then continue end
 
             local distance = (targetPart.Position - lpRoot.Position).Magnitude
@@ -179,7 +189,6 @@ RunService.RenderStepped:Connect(function()
     local target = currentTarget
     if not target or not target.Parent then return end
 
-    -- Extra safety: Stop aiming at dead players
     local hum = target.Parent:FindFirstChild("Humanoid")
     if hum and hum.Health <= 0 then
         currentTarget = nil
@@ -204,18 +213,28 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    if AimbotEnabled and UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-        Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
+    -- Aimbot with custom keybind
+    if AimbotEnabled then
+        local isPressed = (AimbotKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(AimbotKey)) or 
+                          (AimbotKey.EnumType == Enum.KeyCode and UserInput:IsKeyDown(AimbotKey))
+        if isPressed then
+            local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
+        end
     end
 
+    -- Silent Aim with custom keybind
     if SilentAimEnabled then
-        local mouse = game.Players.LocalPlayer:GetMouse()
-        mouse.Target = target
+        local isPressed = (SilentAimKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(SilentAimKey)) or 
+                          (SilentAimKey.EnumType == Enum.KeyCode and UserInput:IsKeyDown(SilentAimKey))
+        if isPressed then
+            local mouse = game.Players.LocalPlayer:GetMouse()
+            mouse.Target = target
+        end
     end
 end)
 
-print("✅ Combat Tab Fixed - No more camera snapping down on death!")
+print("✅ Combat Tab with Custom Keybinds Loaded!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
@@ -886,53 +905,54 @@ print("✅ Full Movement Tab Loaded (Speed Multiplier + Bhop Added)")
 local CrosshairTab = Window:CreateTab("Crosshair", 4483362458)
 
 local DavidStarEnabled = false
-local StarObjects = {}  -- Store all drawing objects
+local StarSize = 35
+local StarColor = Color3.fromRGB(0, 255, 255)
+local StarObjects = {}
 
--- Create David Star (Two overlapping triangles)
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+
+-- Create / Update David Star
 local function CreateDavidStar()
-    -- Clear old ones
-    for _, obj in pairs(StarObjects) do
-        obj:Remove()
-    end
+    -- Clear old
+    for _, obj in pairs(StarObjects) do obj:Remove() end
     table.clear(StarObjects)
 
     local centerX = Camera.ViewportSize.X / 2
     local centerY = Camera.ViewportSize.Y / 2
-    local size = 35
 
-    -- First Triangle (Pointing Up)
+    -- Triangle 1 (Up)
     local star1 = Drawing.new("Triangle")
-    star1.PointA = Vector2.new(centerX, centerY - size)
-    star1.PointB = Vector2.new(centerX - size * 0.866, centerY + size * 0.5)
-    star1.PointC = Vector2.new(centerX + size * 0.866, centerY + size * 0.5)
-    star1.Color = Color3.fromRGB(0, 255, 255)
+    star1.PointA = Vector2.new(centerX, centerY - StarSize)
+    star1.PointB = Vector2.new(centerX - StarSize * 0.866, centerY + StarSize * 0.5)
+    star1.PointC = Vector2.new(centerX + StarSize * 0.866, centerY + StarSize * 0.5)
+    star1.Color = StarColor
     star1.Thickness = 2.5
     star1.Transparency = 1
     star1.Filled = false
     table.insert(StarObjects, star1)
 
-    -- Second Triangle (Pointing Down)
+    -- Triangle 2 (Down)
     local star2 = Drawing.new("Triangle")
-    star2.PointA = Vector2.new(centerX, centerY + size)
-    star2.PointB = Vector2.new(centerX - size * 0.866, centerY - size * 0.5)
-    star2.PointC = Vector2.new(centerX + size * 0.866, centerY - size * 0.5)
-    star2.Color = Color3.fromRGB(0, 255, 255)
+    star2.PointA = Vector2.new(centerX, centerY + StarSize)
+    star2.PointB = Vector2.new(centerX - StarSize * 0.866, centerY - StarSize * 0.5)
+    star2.PointC = Vector2.new(centerX + StarSize * 0.866, centerY - StarSize * 0.5)
+    star2.Color = StarColor
     star2.Thickness = 2.5
     star2.Transparency = 1
     star2.Filled = false
     table.insert(StarObjects, star2)
 
-    -- Optional Center Dot
+    -- Center Dot
     local centerDot = Drawing.new("Circle")
     centerDot.Position = Vector2.new(centerX, centerY)
-    centerDot.Radius = 2
+    centerDot.Radius = 2.5
     centerDot.Color = Color3.fromRGB(255, 255, 255)
     centerDot.Transparency = 1
     centerDot.Filled = true
     table.insert(StarObjects, centerDot)
 end
 
--- Update Star Position every frame (stays centered)
 local CrosshairConnection = nil
 
 local function StartDavidStar()
@@ -943,22 +963,18 @@ local function StartDavidStar()
     CrosshairConnection = RunService.RenderStepped:Connect(function()
         if not DavidStarEnabled then return end
 
-        -- Update position if resolution changes
         local centerX = Camera.ViewportSize.X / 2
         local centerY = Camera.ViewportSize.Y / 2
 
         if #StarObjects >= 3 then
-            local size = 35
+            -- Update Triangles
+            StarObjects[1].PointA = Vector2.new(centerX, centerY - StarSize)
+            StarObjects[1].PointB = Vector2.new(centerX - StarSize * 0.866, centerY + StarSize * 0.5)
+            StarObjects[1].PointC = Vector2.new(centerX + StarSize * 0.866, centerY + StarSize * 0.5)
 
-            -- Update Triangle 1
-            StarObjects[1].PointA = Vector2.new(centerX, centerY - size)
-            StarObjects[1].PointB = Vector2.new(centerX - size * 0.866, centerY + size * 0.5)
-            StarObjects[1].PointC = Vector2.new(centerX + size * 0.866, centerY + size * 0.5)
-
-            -- Update Triangle 2
-            StarObjects[2].PointA = Vector2.new(centerX, centerY + size)
-            StarObjects[2].PointB = Vector2.new(centerX - size * 0.866, centerY - size * 0.5)
-            StarObjects[2].PointC = Vector2.new(centerX + size * 0.866, centerY - size * 0.5)
+            StarObjects[2].PointA = Vector2.new(centerX, centerY + StarSize)
+            StarObjects[2].PointB = Vector2.new(centerX - StarSize * 0.866, centerY - StarSize * 0.5)
+            StarObjects[2].PointC = Vector2.new(centerX + StarSize * 0.866, centerY - StarSize * 0.5)
 
             -- Update Center Dot
             StarObjects[3].Position = Vector2.new(centerX, centerY)
@@ -971,10 +987,7 @@ local function StopDavidStar()
         CrosshairConnection:Disconnect()
         CrosshairConnection = nil
     end
-
-    for _, obj in pairs(StarObjects) do
-        obj:Remove()
-    end
+    for _, obj in pairs(StarObjects) do obj:Remove() end
     table.clear(StarObjects)
 end
 
@@ -992,41 +1005,62 @@ CrosshairTab:CreateToggle({
     end
 })
 
+CrosshairTab:CreateSlider({
+    Name = "Star Size",
+    Range = {15, 60},
+    Increment = 1,
+    CurrentValue = 35,
+    Callback = function(v)
+        StarSize = v
+        if DavidStarEnabled then
+            CreateDavidStar() -- Refresh with new size
+        end
+    end
+})
+
+CrosshairTab:CreateColorPicker({
+    Name = "Star Color",
+    Color = Color3.fromRGB(0, 255, 255),
+    Callback = function(v)
+        StarColor = v
+        if DavidStarEnabled then
+            CreateDavidStar() -- Refresh color
+        end
+    end
+})
+
 CrosshairTab:CreateToggle({
     Name = "Hide In-Game GUI (Clean Screen)",
     CurrentValue = false,
     Callback = function(v)
         if v then
-            -- Hide most player GUIs but keep Rayfield
             for _, gui in ipairs(game.Players.LocalPlayer.PlayerGui:GetChildren()) do
                 if gui:IsA("ScreenGui") and not gui.Name:find("Rayfield") then
                     gui.Enabled = false
                 end
             end
-            print("🧹 In-game GUIs Hidden")
         else
-            -- Restore GUIs
             for _, gui in ipairs(game.Players.LocalPlayer.PlayerGui:GetChildren()) do
                 if gui:IsA("ScreenGui") then
                     gui.Enabled = true
                 end
             end
-            print("🔄 In-game GUIs Restored")
         end
     end
 })
 
 CrosshairTab:CreateButton({
-    Name = "Force Refresh Star",
+    Name = "Force Refresh Crosshair",
     Callback = function()
         if DavidStarEnabled then
             StopDavidStar()
-            task.wait(0.1)
+            task.wait(0.05)
             StartDavidStar()
         end
     end
 })
 
+print("✅ Custom Crosshair Tab Improved (Size + Color Customizable)")
 print("✅ Custom Crosshair Tab Loaded")
 
 -- ====================== MISC TAB ======================
