@@ -20,6 +20,7 @@ local Combat = Window:CreateTab("Combat", 4483362458)
 
 -- Settings
 local AimbotEnabled = false
+local SilentAimEnabled = false
 local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = false
@@ -30,14 +31,15 @@ local AimFOV = 120
 local MaxAimDistance = 300
 local AimPart = "Head"
 local BulletSpeed = 1500
+local GameFOV = 70   -- Default Roblox FOV
 
 local currentTarget = nil
-local lockedTarget = nil   -- Sticky lock
+local lockedTarget = nil
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
 
--- FOV Circle
+-- FOV Circle (for Aimbot)
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
 FOVCircle.NumSides = 100
@@ -48,6 +50,8 @@ FOVCircle.Visible = false
 
 -- ====================== UI ======================
 Combat:CreateToggle({Name = "AI Aimbot (Hold Right Click)", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
+Combat:CreateToggle({Name = "Silent Aim", CurrentValue = false, Callback = function(v) SilentAimEnabled = v end})
+
 Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
 Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = false, Callback = function(v) TargetNPCs = v end})
@@ -60,14 +64,35 @@ Combat:CreateInput({Name = "Aimbot FOV (30-400)", PlaceholderText = "120", Remov
 Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then BulletSpeed = math.clamp(num, 500, 5000) end end})
 
 Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
+
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- ====================== TARGET SELECTION & STICKY LOCK ======================
+-- Game FOV Changer
+Combat:CreateInput({
+    Name = "Game FOV (30-120)",
+    PlaceholderText = "70",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        local num = tonumber(text)
+        if num then
+            GameFOV = math.clamp(num, 30, 120)
+            Camera.FieldOfView = GameFOV
+        end
+    end
+})
+
+-- ====================== TARGET SELECTION (Sticky + Strict FOV) ======================
 task.spawn(function()
     while true do
-        task.wait(0.04)
+        task.wait(0.035)
 
-        if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        if not AimbotEnabled and not SilentAimEnabled then
+            lockedTarget = nil
+            currentTarget = nil
+            continue
+        end
+
+        if not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and AimbotEnabled then
             lockedTarget = nil
             currentTarget = nil
             continue
@@ -77,24 +102,22 @@ task.spawn(function()
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
-        -- Check if current locked target is still valid
+        -- Check locked target validity
         if lockedTarget and lockedTarget.Parent then
             local char = lockedTarget.Parent
-            local humanoid = char:FindFirstChild("Humanoid")
+            local hum = char:FindFirstChild("Humanoid")
             local root = char:FindFirstChild("HumanoidRootPart")
-
-            if humanoid and humanoid.Health > 0 and root then
+            if hum and hum.Health > 0 and root then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
                 local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-
-                if onScreen and centerDist <= AimFOV then
+                if onScreen and centerDist <= AimFOV + 20 then
                     currentTarget = lockedTarget
-                    continue  -- Keep locked
+                    continue
                 end
             end
         end
 
-        -- Find new target if no valid lock
+        -- Find new target
         local bestTarget = nil
         local bestScore = -math.huge
 
@@ -118,7 +141,6 @@ task.spawn(function()
             local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
             if centerDist > AimFOV then continue end
 
-            -- VisCheck
             if VisCheck then
                 local params = RaycastParams.new()
                 params.FilterDescendantsInstances = {lp.Character}
@@ -127,11 +149,10 @@ task.spawn(function()
                 if result and not result.Instance:IsDescendantOf(char) then continue end
             end
 
-            -- Scoring
             local score = 0
-            score -= centerDist * 2.2
-            score -= distance * 0.7
-            if targetPart.Name == "Head" then score += 30 end
+            score -= centerDist * 2.5
+            score -= distance * 0.6
+            if targetPart.Name == "Head" then score += 35 end
 
             if score > bestScore then
                 bestScore = score
@@ -146,14 +167,10 @@ task.spawn(function()
     end
 end)
 
--- ====================== AIMING ======================
+-- ====================== AIMBOT + SILENT AIM ======================
 RunService.RenderStepped:Connect(function()
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     FOVCircle.Radius = AimFOV
-
-    if not AimbotEnabled or not UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then 
-        return 
-    end
 
     local target = currentTarget
     if not target or not target.Parent then return end
@@ -166,23 +183,31 @@ RunService.RenderStepped:Connect(function()
         if lpRoot then
             local dist = (aimPos - lpRoot.Position).Magnitude
             local travelTime = dist / BulletSpeed
-
             local predicted = aimPos + root.Velocity * travelTime
 
             if BulletDropCompensation then
-                local gravityDrop = 0.5 * workspace.Gravity * travelTime * travelTime
+                local gravityDrop = 0.5 * workspace.Gravity * travelTime^2
                 predicted += Vector3.new(0, -gravityDrop * 0.75, 0)
             end
-
             aimPos = predicted
         end
     end
 
-    local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
+    -- Regular Aimbot (Visible)
+    if AimbotEnabled and UserInput:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
+    end
+
+    -- Silent Aim (Invisible)
+    if SilentAimEnabled then
+        local mouse = game.Players.LocalPlayer:GetMouse()
+        mouse.Target = target
+        -- Optional: Force hit detection (works in many games)
+    end
 end)
 
-print("✅ Sticky Aimbot Lock Fixed & Improved!")
+print("✅ Added Game FOV Changer + Silent Aim!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
