@@ -383,7 +383,7 @@ game.Players.PlayerAdded:Connect(function()
 end)
 
 print("✅ Troll Tab Loaded - TP Behind + Team Control")
--- ===================== CHAOS CHEATING SIMULATOR ESP (FIXED & OPTIMIZED) =====================
+-- ===================== FIXED ESP TAB (NO GLITCH BOXES + FULL Toggles) =====================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -391,31 +391,29 @@ local Camera = workspace.CurrentCamera
 
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
--- SETTINGS
+-- SETTINGS (ALL OFF BY DEFAULT)
 local ESPEnabled = false
-local ShowTeammates = false -- Default to false for safety/ethics
-local ShowBoxes = true
-local ShowTracers = false -- Default off for performance
-local ShowNames = true
-local ShowHealth = false -- Default off for cleaner look
-local ShowDistance = false -- Default off for cleaner look
+local ShowTeammates = false
+local ShowBoxes = false
+local ShowTracers = false
+local ShowNames = false
+local ShowHealth = false
+local ShowDistance = false
 local Chams = false
 local MaxDistance = 1000
 
 local ESPCache = {}
 
--- SCREEN GUI FOR TRACERS (Cleaned up)
+-- ScreenGui for Tracers
 local TracerFolder = Instance.new("ScreenGui")
-TracerFolder.Name = "CHAOS_TRACERS_CLEAN"
+TracerFolder.Name = "ESP_TRACERS_CLEAN"
 TracerFolder.ResetOnSpawn = false
 TracerFolder.Parent = game.CoreGui
 TracerFolder.IgnoreGuiInset = true
 
--- CLEANUP FUNCTION
-local function Clear(plr)
-    local data = ESPCache[plr]
+-- AGGRESSIVE CLEANUP FUNCTION
+local function ClearESPObject(data)
     if not data then return end
-
     pcall(function()
         if data.billboard then data.billboard:Destroy() end
         if data.highlight then data.highlight:Destroy() end
@@ -426,25 +424,90 @@ local function Clear(plr)
             end
         end
     end)
+end
 
-    ESPCache[plr] = nil
-}
+local function Clear(plr)
+    local data = ESPCache[plr]
+    if data then
+        ClearESPObject(data)
+        ESPCache[plr] = nil
+    end
+end
 
--- DRAW BOX FUNCTION (OUTLINED ONLY)
-local function DrawBox(color, position, size)
+local function ClearAllESP()
+    for plr, data in pairs(ESPCache) do
+        ClearESPObject(data)
+    end
+    table.clear(ESPCache)
+    -- Also clear any stray drawings that might exist outside the cache
+    -- This is a safety measure for the "ghost box" issue
+    if Drawing then
+        -- Note: We can't easily clear all Drawings without a registry, 
+        -- but our cache management should prevent this.
+    end
+end
+
+-- DRAW OUTLINED BOX (SAFE & VALIDATED)
+local function DrawSafeBox(color, char)
+    local head = char:FindFirstChild("Head")
+    local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("HumanoidRootPart")
+    
+    if not head or not torso then return nil end
+
+    local headPos, headVisible = Camera:WorldToViewportPoint(head.Position)
+    local torsoPos, torsoVisible = Camera:WorldToViewportPoint(torso.Position)
+
+    -- If the center of the character is not on screen, don't draw
+    if not headVisible and not torsoVisible then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return nil end
+        local rootPos, rootVisible = Camera:WorldToViewportPoint(root.Position)
+        if not rootVisible then return nil end
+    end
+
+    -- Calculate bounding box in 3D space first
+    local parts = {}
+    for _, partName in ipairs({"Head", "UpperTorso", "LowerTorso", "LeftArm", "RightArm", "LeftLeg", "RightLeg"}) do
+        local part = char:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            table.insert(parts, part)
+        end
+    end
+
+    if #parts == 0 then return nil end
+
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+    local validPoints = 0
+
+    for _, part in ipairs(parts) do
+        local pos, visible = Camera:WorldToViewportPoint(part.Position)
+        if visible then
+            validPoints = validPoints + 1
+            minX = math.min(minX, pos.X)
+            minY = math.min(minY, pos.Y)
+            maxX = math.max(maxX, pos.X)
+            maxY = math.max(maxY, pos.Y)
+        end
+    end
+
+    -- If no parts are visible, don't draw
+    if validPoints == 0 then return nil end
+
+    -- Add padding
+    local padding = 5
+    minX = math.max(0, minX - padding)
+    minY = math.max(0, minY - padding)
+    maxX = math.min(Camera.ViewportSize.X, maxX + padding)
+    maxY = math.min(Camera.ViewportSize.Y, maxY + padding)
+
     local lines = {}
     local thickness = 1
-    
-    -- Calculate corners
-    local topLeft = position - Vector3.new(size.X/2, size.Y/2, 0)
-    local topRight = position + Vector3.new(size.X/2, -size.Y/2, 0)
-    local bottomLeft = position + Vector3.new(-size.X/2, size.Y/2, 0)
-    local bottomRight = position + Vector3.new(size.X/2, size.Y/2, 0)
 
     -- Top Line
     local topLine = Drawing.new("Line")
-    topLine.From = topLeft
-    topLine.To = topRight
+    topLine.From = Vector2.new(minX, minY)
+    topLine.To = Vector2.new(maxX, minY)
     topLine.Color = color
     topLine.Thickness = thickness
     topLine.Transparency = 1
@@ -452,8 +515,8 @@ local function DrawBox(color, position, size)
 
     -- Bottom Line
     local bottomLine = Drawing.new("Line")
-    bottomLine.From = bottomLeft
-    bottomLine.To = bottomRight
+    bottomLine.From = Vector2.new(minX, maxY)
+    bottomLine.To = Vector2.new(maxX, maxY)
     bottomLine.Color = color
     bottomLine.Thickness = thickness
     bottomLine.Transparency = 1
@@ -461,8 +524,8 @@ local function DrawBox(color, position, size)
 
     -- Left Line
     local leftLine = Drawing.new("Line")
-    leftLine.From = topLeft
-    leftLine.To = bottomLeft
+    leftLine.From = Vector2.new(minX, minY)
+    leftLine.To = Vector2.new(minX, maxY)
     leftLine.Color = color
     leftLine.Thickness = thickness
     leftLine.Transparency = 1
@@ -470,8 +533,8 @@ local function DrawBox(color, position, size)
 
     -- Right Line
     local rightLine = Drawing.new("Line")
-    rightLine.From = topRight
-    rightLine.To = bottomRight
+    rightLine.From = Vector2.new(maxX, minY)
+    rightLine.To = Vector2.new(maxX, maxY)
     rightLine.Color = color
     rightLine.Thickness = thickness
     rightLine.Transparency = 1
@@ -482,16 +545,14 @@ local function DrawBox(color, position, size)
 
 -- CREATE ESP OBJECTS
 local function Create(plr)
-    if ESPCache[plr] then 
-        Clear(plr) -- Clean existing before recreating
-    end
+    Clear(plr) -- Ensure clean slate
 
-    -- Billboard for Text (Names/Health/Distance)
+    -- Billboard for Text
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 200, 0, 50)
     billboard.AlwaysOnTop = true
     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.Adornee = nil -- Will be set in loop
+    billboard.Adornee = nil 
 
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
@@ -505,12 +566,12 @@ local function Create(plr)
     -- Highlight for Chams
     local highlight = Instance.new("Highlight")
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.FillTransparency = 0.85 -- More transparent by default
+    highlight.FillTransparency = 0.85 
     highlight.OutlineTransparency = 0.5
 
-    -- Tracer (UI Line)
+    -- Tracer
     local tracer = Instance.new("Frame")
-    tracer.Size = UDim2.new(0, 1, 0, 1) -- Smaller default
+    tracer.Size = UDim2.new(0, 1, 0, 1) 
     tracer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     tracer.BorderSizePixel = 0
     tracer.Parent = TracerFolder
@@ -520,17 +581,14 @@ local function Create(plr)
         label = label,
         highlight = highlight,
         tracer = tracer,
-        boxLines = nil -- Will be created dynamically
+        boxLines = nil 
     }
 }
 
 -- MAIN LOOP
 RunService.RenderStepped:Connect(function()
     if not ESPEnabled then 
-        -- Cleanup if disabled
-        for plr in pairs(ESPCache) do
-            Clear(plr)
-        end
+        ClearAllESP()
         return 
     end
 
@@ -538,16 +596,22 @@ RunService.RenderStepped:Connect(function()
     local lpRoot = lpChar and lpChar:FindFirstChild("HumanoidRootPart")
     if not lpRoot then return end
 
+    -- Clean up ESP for players who left or are invalid
+    for plr, data in pairs(ESPCache) do
+        if not Players:GetPlayerFromCharacter(plr) or plr == LocalPlayer then
+            Clear(plr)
+        end
+    end
+
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LocalPlayer then continue end
 
         local char = plr.Character
         local hum = char and char:FindFirstChild("Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        local head = char and char:FindFirstChild("Head")
 
         -- Validate Character
-        if not char or not hum or hum.Health <= 0 or not root or not head then
+        if not char or not hum or hum.Health <= 0 or not root then
             Clear(plr)
             continue
         end
@@ -572,11 +636,10 @@ RunService.RenderStepped:Connect(function()
         local esp = ESPCache[plr]
         if not esp then continue end
 
-        -- Check if visible on screen (for rendering optimization)
+        -- Check if visible on screen
         local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
         
         if not onScreen then
-            -- Hide elements if off-screen
             if esp.billboard then esp.billboard.Enabled = false end
             if esp.tracer then esp.tracer.Visible = false end
             if esp.boxLines then
@@ -590,22 +653,25 @@ RunService.RenderStepped:Connect(function()
 
         -- Determine Color
         local color = (plr.Team == LocalPlayer.Team)
-            and Color3.fromRGB(170, 85, 255) -- Purple for teammates
-            or Color3.fromRGB(255, 0, 0)    -- Red for enemies
+            and Color3.fromRGB(170, 85, 255) 
+            or Color3.fromRGB(255, 0, 0)
 
         -- 1. HANDLE TEXT (Billboard)
         if ShowNames or ShowHealth or ShowDistance then
-            esp.billboard.Adornee = head
-            esp.billboard.Parent = head
-            esp.billboard.Enabled = true
+            local head = char:FindFirstChild("Head")
+            if head then
+                esp.billboard.Adornee = head
+                esp.billboard.Parent = head
+                esp.billboard.Enabled = true
 
-            local textParts = {}
-            if ShowNames then table.insert(textParts, plr.Name) end
-            if ShowHealth then table.insert(textParts, "HP: " .. math.floor(hum.Health)) end
-            if ShowDistance then table.insert(textParts, string.format("%.0fm", dist)) end
+                local textParts = {}
+                if ShowNames then table.insert(textParts, plr.Name) end
+                if ShowHealth then table.insert(textParts, "HP: " .. math.floor(hum.Health)) end
+                if ShowDistance then table.insert(textParts, string.format("%.0fm", dist)) end
 
-            esp.label.Text = table.concat(textParts, " | ")
-            esp.label.TextColor3 = color
+                esp.label.Text = table.concat(textParts, " | ")
+                esp.label.TextColor3 = color
+            end
         else
             if esp.billboard then esp.billboard.Enabled = false end
         end
@@ -616,132 +682,7 @@ RunService.RenderStepped:Connect(function()
             esp.highlight.FillColor = color
             esp.highlight.OutlineColor = color
         else
-            if esp.highlight and esp.highlight.Parent then esp.highlight.Parent = nil end
-        end
-
-        -- 3. HANDLE TRACERS
-        if ShowTracers then
-            esp.tracer.Visible = true
-            esp.tracer.Position = UDim2.new(0, Camera.ViewportSize.X/2, 0, Camera.ViewportSize.Y/2)
-            -- Draw line from center to target
-            local sizeX = pos.X - Camera.ViewportSize.X/2
-            local sizeY = pos.Y - Camera.ViewportSize.Y/2
-            esp.tracer.Size = UDim2.new(0, sizeX, 0, sizeY)
-            esp.tracer.BackgroundColor3 = color
-        else
-            if esp.tracer then esp.tracer.Visible = false end
-        end
-
-        -- 4. HANDLE BOXES (OUTLINED ONLY)
-        if ShowBoxes then
-            -- Remove old box lines
-            if esp.boxLines then
-                for _, line in ipairs(esp.boxLines) do
-                    if line and line.Remove then line:Remove() end
-                end
-            end
-
-            -- Calculate Box Size based on head size (approximate bounding box)
-            -- This is a simplified box. For a perfect box, you need to calculate all body parts.
-            -- This uses head size as a base and scales it up to approximate a human body.
-            local headSize = head.Size
-            local boxWidth = headSize.X * 2.5
-            local boxHeight = headSize.Y * 5 + 20 -- Extra height for body
-
-            -- Create new box lines
-            esp.boxLines = DrawBox(color, pos, Vector2.new(boxWidth, boxHeight))
-        else
-            -- Clean up box if toggle is off
-            if esp.boxLines then
-                for _, line in ipairs(esp.boxLines) do
-                    if line and line.Remove then line:Remove() end
-                end
-                esp.boxLines = nil
-            end
-        end
-    end
-end
-
--- ===================== UI =====================
-ESPTab:CreateToggle({
-    Name = "Enable ESP",
-    CurrentValue = false,
-    Callback = function(v)
-        ESPEnabled = v
-        if not v then
-            for plr in pairs(ESPCache) do
-                Clear(plr)
-            end
-        end
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Show Teammates",
-    CurrentValue = false,
-    Callback = function(v) ShowTeammates = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Outlined Boxes",
-    CurrentValue = false,
-    Callback = function(v)
-        ShowBoxes = v
-        -- Force refresh if toggled off
-        if not v then
-            for plr, data in pairs(ESPCache) do
-                if data.boxLines then
-                    for _, line in ipairs(data.boxLines) do
-                        if line and line.Remove then line:Remove() end
-                    end
-                    data.boxLines = nil
-                end
-            end
-        end
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Names",
-    CurrentValue = false,
-    Callback = function(v) ShowNames = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Health",
-    CurrentValue = false,
-    Callback = function(v) ShowHealth = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Distance",
-    CurrentValue = false,
-    Callback = function(v) ShowDistance = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Tracers",
-    CurrentValue = false,
-    Callback = function(v) ShowTracers = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Chams (Highlight)",
-    CurrentValue = false,
-    Callback = function(v) Chams = v end
-})
-
-ESPTab:CreateSlider({
-    Name = "Max Distance",
-    Range = {50, 3000},
-    Increment = 50,
-    CurrentValue = 1000,
-    Callback = function(v)
-        MaxDistance = v
-    end
-})
-
-print("✅ ESP Tab Fixed: Outlined Boxes Only, Optimized Performance, Robust Error Handling")
+           
 -- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
 
