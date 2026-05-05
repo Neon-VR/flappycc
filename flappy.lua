@@ -386,70 +386,70 @@ print("✅ Troll Tab Loaded - TP Behind + Team Control")
 -- ===================== ESP TAB (CHAOS CHEATING SIMULATOR) =====================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
--- ===================== SETTINGS =====================
+-- SETTINGS
 local ESPEnabled = false
 local ShowTeammates = true
 
 local BoxESP = true
 local Tracers = true
 local Names = true
-local HealthESP = true
-local DistanceESP = true
+local Health = true
+local Distance = true
 local Chams = false
 
 local MaxDistance = 1000
 
-local ESPObjects = {}
+local ESPCache = {}
 
--- ===================== CLEANUP =====================
-local function RemoveESP(plr)
-    local data = ESPObjects[plr]
+-- CLEANUP
+local function ClearESP(plr)
+    local data = ESPCache[plr]
     if not data then return end
 
-    if data.Box then data.Box:Remove() end
-    if data.Tracer then data.Tracer:Remove() end
-    if data.Highlight then data.Highlight:Destroy() end
-    if data.Billboard then data.Billboard:Destroy() end
+    if data.billboard then data.billboard:Destroy() end
+    if data.highlight then data.highlight:Destroy() end
+    if data.tracer then data.tracer:Destroy() end
 
-    ESPObjects[plr] = nil
+    ESPCache[plr] = nil
 end
 
--- ===================== CREATE ESP =====================
+-- CREATE ESP
 local function CreateESP(plr)
-    if ESPObjects[plr] then return end
+    if ESPCache[plr] then return end
 
-    local box = Drawing.new("Square")
-    box.Thickness = 1
-    box.Filled = false
-    box.Color = Color3.fromRGB(0, 255, 255)
-    box.Visible = false
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
 
-    local tracer = Drawing.new("Line")
-    tracer.Thickness = 1
-    tracer.Color = Color3.fromRGB(255, 255, 255)
-    tracer.Visible = false
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1,0,1,0)
+    text.BackgroundTransparency = 1
+    text.TextScaled = false
+    text.Font = Enum.Font.GothamBold
+    text.TextSize = 14
+    text.TextStrokeTransparency = 0.3
+    text.Parent = billboard
 
-    local text = Drawing.new("Text")
-    text.Size = 13
-    text.Center = true
-    text.Outline = true
-    text.Color = Color3.fromRGB(255, 255, 255)
-    text.Visible = false
+    local highlight = Instance.new("Highlight")
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
 
-    ESPObjects[plr] = {
-        Box = box,
-        Tracer = tracer,
-        Text = text,
-        Highlight = nil
+    ESPCache[plr] = {
+        billboard = billboard,
+        text = text,
+        highlight = highlight,
     }
 end
 
--- ===================== MAIN LOOP =====================
+-- MAIN LOOP
 RunService.RenderStepped:Connect(function()
     if not ESPEnabled then return end
 
@@ -466,98 +466,63 @@ RunService.RenderStepped:Connect(function()
         local head = char and char:FindFirstChild("Head")
 
         if not char or not hum or hum.Health <= 0 or not root then
-            RemoveESP(plr)
+            ClearESP(plr)
             continue
         end
 
-        -- TEAM CHECK
         if not ShowTeammates and plr.Team == LocalPlayer.Team then
-            RemoveESP(plr)
+            ClearESP(plr)
             continue
         end
 
         local dist = (root.Position - lpRoot.Position).Magnitude
         if dist > MaxDistance then
-            RemoveESP(plr)
+            ClearESP(plr)
             continue
         end
 
         CreateESP(plr)
-        local esp = ESPObjects[plr]
+        local esp = ESPCache[plr]
 
-        local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
-        if not onScreen then
-            esp.Box.Visible = false
-            esp.Tracer.Visible = false
-            esp.Text.Visible = false
-            continue
-        end
-
-        local size = Vector2.new(40, 70)
-        local boxPos = Vector2.new(pos.X - size.X/2, pos.Y - size.Y/2)
-
-        local color = (plr.Team == LocalPlayer.Team) and Color3.fromRGB(170, 85, 255)
+        -- COLOR
+        local color = (plr.Team == LocalPlayer.Team)
+            and Color3.fromRGB(170, 85, 255)
             or Color3.fromRGB(0, 255, 255)
 
-        -- ===================== BOX =====================
-        if BoxESP then
-            esp.Box.Size = size
-            esp.Box.Position = boxPos
-            esp.Box.Color = color
-            esp.Box.Visible = true
-        else
-            esp.Box.Visible = false
-        end
+        -- BILLBOARD
+        if Names or Health or Distance then
+            esp.billboard.Parent = head
 
-        -- ===================== TRACERS =====================
-        if Tracers then
-            esp.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-            esp.Tracer.To = Vector2.new(pos.X, pos.Y)
-            esp.Tracer.Color = color
-            esp.Tracer.Visible = true
-        else
-            esp.Tracer.Visible = false
-        end
-
-        -- ===================== TEXT (NAME / HP / DIST) =====================
-        if Names or HealthESP or DistanceESP then
-            local nameText = ""
+            local txt = ""
 
             if Names then
-                nameText = plr.Name
+                txt ..= plr.Name
             end
 
-            if HealthESP then
-                nameText = nameText .. " | HP: " .. math.floor(hum.Health)
+            if Health then
+                txt ..= " | HP: " .. math.floor(hum.Health)
             end
 
-            if DistanceESP then
-                nameText = nameText .. string.format(" | %.0fm", dist)
+            if Distance then
+                txt ..= string.format(" | %.0fm", dist)
             end
 
-            esp.Text.Position = Vector2.new(pos.X, pos.Y - 25)
-            esp.Text.Text = nameText
-            esp.Text.Color = color
-            esp.Text.Visible = true
+            esp.text.Text = txt
+            esp.text.TextColor3 = color
+            esp.billboard.Enabled = true
         else
-            esp.Text.Visible = false
+            esp.billboard.Enabled = false
         end
 
-        -- ===================== CHAMS =====================
+        -- CHAMS
         if Chams then
-            if not esp.Highlight then
-                local h = Instance.new("Highlight")
-                h.Parent = char
-                h.FillTransparency = 0.5
-                h.OutlineTransparency = 0
-                esp.Highlight = h
-            end
-            esp.Highlight.FillColor = color
-            esp.Highlight.OutlineColor = color
+            esp.highlight.Parent = char
+            esp.highlight.FillColor = color
+            esp.highlight.OutlineColor = color
         else
-            if esp.Highlight then
-                esp.Highlight:Destroy()
-                esp.Highlight = nil
+            if esp.highlight then
+                esp.highlight:Destroy()
+                esp.highlight = Instance.new("Highlight")
             end
         end
     end
@@ -570,8 +535,8 @@ ESPTab:CreateToggle({
     Callback = function(v)
         ESPEnabled = v
         if not v then
-            for plr in pairs(ESPObjects) do
-                RemoveESP(plr)
+            for plr in pairs(ESPCache) do
+                ClearESP(plr)
             end
         end
     end
@@ -586,44 +551,26 @@ ESPTab:CreateToggle({
 })
 
 ESPTab:CreateToggle({
-    Name = "Boxes",
+    Name = "Names / HP / Distance",
     CurrentValue = true,
-    Callback = function(v) BoxESP = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Tracers",
-    CurrentValue = true,
-    Callback = function(v) Tracers = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Names",
-    CurrentValue = true,
-    Callback = function(v) Names = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Health",
-    CurrentValue = true,
-    Callback = function(v) HealthESP = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Distance",
-    CurrentValue = true,
-    Callback = function(v) DistanceESP = v end
+    Callback = function(v)
+        Names = v
+        Health = v
+        Distance = v
+    end
 })
 
 ESPTab:CreateToggle({
     Name = "Chams",
     CurrentValue = false,
-    Callback = function(v) Chams = v end
+    Callback = function(v)
+        Chams = v
+    end
 })
 
 ESPTab:CreateSlider({
     Name = "Max Distance",
-    Range = {100, 3000},
+    Range = {50, 3000},
     Increment = 50,
     CurrentValue = 1000,
     Callback = function(v)
