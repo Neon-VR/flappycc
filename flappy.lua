@@ -383,18 +383,22 @@ game.Players.PlayerAdded:Connect(function()
 end)
 
 print("✅ Troll Tab Loaded - TP Behind + Team Control")
--- ====================== ESP TAB (FIXED TEAM SUPPORT) ======================
+-- ====================== ESP TAB ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 -- Settings
 local ESPEnabled = false
+local ShowTeammates = false
+
 local BoxEnabled = true
 local NameEnabled = true
 local TracerEnabled = true
 local ChamsEnabled = false
 
-local ShowTeammates = false
 local MaxTracerDistance = 200
+
+local EnemyColor = Color3.fromRGB(255, 105, 180) -- pink
+local TeamColor = Color3.fromRGB(170, 85, 255)   -- purple
 
 local ESPData = {}
 local Camera = workspace.CurrentCamera
@@ -407,8 +411,8 @@ local function CleanupPlayer(player)
     local data = ESPData[player]
     if not data then return end
 
-    if data.Box then pcall(function() data.Box:Remove() end) end
-    if data.Tracer then pcall(function() data.Tracer:Remove() end) end
+    if data.Box then data.Box:Remove() end
+    if data.Tracer then data.Tracer:Remove() end
     if data.Billboard then data.Billboard:Destroy() end
     if data.Highlight then data.Highlight:Destroy() end
 
@@ -422,12 +426,9 @@ local function FullCleanup()
     table.clear(ESPData)
 end
 
--- ====================== DRAW ======================
+-- ====================== BOX ======================
 local function UpdateBox(data, screenPos, height, color)
-    if not BoxEnabled then
-        if data.Box then data.Box.Visible = false end
-        return
-    end
+    if not BoxEnabled then return end
 
     if not data.Box then
         data.Box = Drawing.new("Square")
@@ -436,92 +437,89 @@ local function UpdateBox(data, screenPos, height, color)
         data.Box.Transparency = 0.85
     end
 
-    local size = Vector2.new(height * 0.6, height * 1.85)
+    local size = Vector2.new(height * 0.55, height * 1.75)
+
     data.Box.Size = size
     data.Box.Position = Vector2.new(screenPos.X - size.X/2, screenPos.Y - size.Y/2)
     data.Box.Color = color
     data.Box.Visible = true
 end
 
+-- ====================== TRACER ======================
 local function UpdateTracer(data, screenPos, distance, color)
-    if not TracerEnabled or distance > MaxTracerDistance then
-        if data.Tracer then data.Tracer.Visible = false end
-        return
-    end
+    if not TracerEnabled or distance > MaxTracerDistance then return end
 
     if not data.Tracer then
         data.Tracer = Drawing.new("Line")
-        data.Tracer.Thickness = 1.6
+        data.Tracer.Thickness = 1.4
         data.Tracer.Transparency = 0.75
     end
 
-    data.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    data.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
     data.Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
     data.Tracer.Color = color
     data.Tracer.Visible = true
 end
 
+-- ====================== NAME TAG ======================
 local function UpdateNameTag(data, player, char, distance, color)
-    if not NameEnabled then
-        if data.Billboard then data.Billboard.Enabled = false end
-        return
-    end
+    if not NameEnabled then return end
 
     local head = char:FindFirstChild("Head")
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not head or not humanoid or humanoid.Health <= 0 then
-        if data.Billboard then data.Billboard.Enabled = false end
-        return
-    end
+    local hum = char:FindFirstChild("Humanoid")
+    if not head or not hum or hum.Health <= 0 then return end
 
     if not data.Billboard then
         data.Billboard = Instance.new("BillboardGui")
-        data.Billboard.Name = "flappyESP"
-        data.Billboard.Adornee = head
-        data.Billboard.Size = UDim2.new(0, 240, 0, 90)
-        data.Billboard.StudsOffset = Vector3.new(0, 3.8, 0)
+        data.Billboard.Size = UDim2.new(0, 140, 0, 55) -- SMALLER
+        data.Billboard.StudsOffset = Vector3.new(0, 2.5, 0)
         data.Billboard.AlwaysOnTop = true
 
         local txt = Instance.new("TextLabel")
-        txt.Name = "Text"
         txt.BackgroundTransparency = 1
-        txt.TextScaled = true
-        txt.Font = Enum.Font.GothamBold
-        txt.TextStrokeTransparency = 0.1
-        txt.TextStrokeColor3 = Color3.fromRGB(0,0,0)
         txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.Font = Enum.Font.GothamSemibold
+        txt.TextScaled = false
+        txt.TextSize = 12 -- SMALL TEXT
+        txt.TextStrokeTransparency = 0.3
+        txt.TextColor3 = color
         txt.Parent = data.Billboard
+
+        data.TextLabel = txt
     end
 
-    if data.Billboard.Parent ~= head then
-        data.Billboard.Parent = head
-    end
+    data.Billboard.Parent = head
 
-    local health = math.floor(humanoid.Health + 0.5)
-    data.Billboard.Text.Text = string.format("%s\n[%d HP]\n%d studs", player.Name, health, math.floor(distance))
-    data.Billboard.Text.TextColor3 = color
+    local hp = math.floor(hum.Health)
+
+    data.TextLabel.Text = string.format(
+        "%s\n%d HP | %dst",
+        player.Name,
+        hp,
+        math.floor(distance)
+    )
+
+    data.TextLabel.TextColor3 = color
     data.Billboard.Enabled = true
 end
 
+-- ====================== CHAMS ======================
 local function UpdateChams(char, color)
     if not ChamsEnabled then return end
 
     local highlight = char:FindFirstChild("flappyChams")
-    if highlight then
-        highlight.FillColor = color
-        highlight.OutlineColor = color
-        highlight.Enabled = true
-        return
+    if not highlight then
+        highlight = Instance.new("Highlight")
+        highlight.Name = "flappyChams"
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = char
     end
 
-    highlight = Instance.new("Highlight")
-    highlight.Name = "flappyChams"
     highlight.FillColor = color
     highlight.OutlineColor = color
-    highlight.FillTransparency = 0.6
+    highlight.FillTransparency = 0.5
     highlight.OutlineTransparency = 0.2
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = char
+    highlight.Enabled = true
 end
 
 -- ====================== MAIN LOOP ======================
@@ -537,25 +535,19 @@ local function StartESP()
 
         for _, player in ipairs(game.Players:GetPlayers()) do
             if player == lp then continue end
+            if not player.Character then continue end
 
-            local isTeammate = player.Team == lp.Team
-
-            -- 🔴 KEY FIX
-            if isTeammate and not ShowTeammates then
+            -- TEAM FILTER
+            if not ShowTeammates and player.Team == lp.Team then
                 CleanupPlayer(player)
                 continue
             end
 
             local char = player.Character
-            if not char then
-                CleanupPlayer(player)
-                continue
-            end
-
             local root = char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char:FindFirstChild("Humanoid")
+            local hum = char:FindFirstChild("Humanoid")
 
-            if not root or not humanoid or humanoid.Health <= 0 then
+            if not root or not hum or hum.Health <= 0 then
                 CleanupPlayer(player)
                 continue
             end
@@ -566,22 +558,17 @@ local function StartESP()
 
             local data = ESPData[player]
 
-            -- 🔵 TEAM COLOR / 🔴 ENEMY COLOR
-            local color = isTeammate and Color3.fromRGB(0, 0, 255) or Color3.fromRGB(255, 0, 0)
-
             local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-            if not onScreen then
-                if data.Box then data.Box.Visible = false end
-                if data.Tracer then data.Tracer.Visible = false end
-                if data.Billboard then data.Billboard.Enabled = false end
-                continue
-            end
+            if not onScreen then continue end
 
             local distance = (root.Position - lpRoot.Position).Magnitude
 
             local top = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
             local bottom = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
             local height = top.Y - bottom.Y
+
+            local isTeam = player.Team == lp.Team
+            local color = isTeam and TeamColor or EnemyColor
 
             UpdateBox(data, screenPos, height, color)
             UpdateTracer(data, screenPos, distance, color)
@@ -601,7 +588,7 @@ end
 
 -- ====================== UI ======================
 ESPTab:CreateToggle({
-    Name = "Master ESP Toggle",
+    Name = "Master ESP",
     CurrentValue = false,
     Callback = function(v)
         ESPEnabled = v
@@ -618,19 +605,19 @@ ESPTab:CreateToggle({
 })
 
 ESPTab:CreateToggle({
-    Name = "2D Box ESP",
+    Name = "Boxes",
     CurrentValue = true,
     Callback = function(v) BoxEnabled = v end
 })
 
 ESPTab:CreateToggle({
-    Name = "Name + Health + Distance",
+    Name = "Names / HP / Distance",
     CurrentValue = true,
     Callback = function(v) NameEnabled = v end
 })
 
 ESPTab:CreateToggle({
-    Name = "Line Tracers",
+    Name = "Tracers",
     CurrentValue = true,
     Callback = function(v) TracerEnabled = v end
 })
@@ -638,23 +625,14 @@ ESPTab:CreateToggle({
 ESPTab:CreateToggle({
     Name = "Chams",
     CurrentValue = false,
-    Callback = function(v)
-        ChamsEnabled = v
-        if not v then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Highlight") and obj.Name == "flappyChams" then
-                    obj:Destroy()
-                end
-            end
-        end
-    end
+    Callback = function(v) ChamsEnabled = v end
 })
 
 ESPTab:CreateInput({
     Name = "Max Tracer Distance",
     PlaceholderText = "200",
-    Callback = function(text)
-        local num = tonumber(text)
+    Callback = function(v)
+        local num = tonumber(v)
         if num then
             MaxTracerDistance = math.clamp(num, 50, 1000)
         end
@@ -662,6 +640,8 @@ ESPTab:CreateInput({
 })
 
 game.Players.PlayerRemoving:Connect(CleanupPlayer)
+
+print("✅ ESP Tab Loaded (Team Colors + Toggle + Cleaner UI)")
 -- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
 
