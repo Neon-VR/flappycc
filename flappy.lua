@@ -383,7 +383,7 @@ game.Players.PlayerAdded:Connect(function()
 end)
 
 print("✅ Troll Tab Loaded - TP Behind + Team Control")
--- ====================== ESP TAB (TEAM SUPPORT) ======================
+-- ====================== ESP TAB (FIXED TEAM SUPPORT) ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 -- Settings
@@ -394,10 +394,6 @@ local TracerEnabled = true
 local ChamsEnabled = false
 
 local ShowTeammates = false
-
-local EnemyColor = Color3.fromRGB(0, 255, 255)
-local TeamColor = Color3.fromRGB(0, 170, 255)
-
 local MaxTracerDistance = 200
 
 local ESPData = {}
@@ -426,7 +422,7 @@ local function FullCleanup()
     table.clear(ESPData)
 end
 
--- ====================== UPDATE ======================
+-- ====================== DRAW ======================
 local function UpdateBox(data, screenPos, height, color)
     if not BoxEnabled then
         if data.Box then data.Box.Visible = false end
@@ -485,7 +481,6 @@ local function UpdateNameTag(data, player, char, distance, color)
         data.Billboard.Size = UDim2.new(0, 240, 0, 90)
         data.Billboard.StudsOffset = Vector3.new(0, 3.8, 0)
         data.Billboard.AlwaysOnTop = true
-        data.Billboard.ResetOnSpawn = false
 
         local txt = Instance.new("TextLabel")
         txt.Name = "Text"
@@ -545,6 +540,7 @@ local function StartESP()
 
             local isTeammate = player.Team == lp.Team
 
+            -- 🔴 KEY FIX
             if isTeammate and not ShowTeammates then
                 CleanupPlayer(player)
                 continue
@@ -569,7 +565,9 @@ local function StartESP()
             end
 
             local data = ESPData[player]
-            local color = isTeammate and TeamColor or EnemyColor
+
+            -- 🔵 TEAM COLOR / 🔴 ENEMY COLOR
+            local color = isTeammate and Color3.fromRGB(0, 0, 255) or Color3.fromRGB(255, 0, 0)
 
             local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
             if not onScreen then
