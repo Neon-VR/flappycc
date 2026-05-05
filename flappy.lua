@@ -383,7 +383,7 @@ game.Players.PlayerAdded:Connect(function()
 end)
 
 print("✅ Troll Tab Loaded - TP Behind + Team Control")
--- ====================== ESP TAB (REPLACEMENT CLEAN VERSION) ======================
+-- ====================== ESP TAB (FIXED DROP-IN) ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
 local Players = game:GetService("Players")
@@ -401,52 +401,47 @@ local TracerEnabled = true
 local NameEnabled = true
 local ChamsEnabled = false
 
-local TextSize = 12
 local MaxDistance = 500
 
--- COLORS
 local EnemyColor = Color3.fromRGB(255, 105, 180)
 local TeamColor = Color3.fromRGB(170, 85, 255)
 
--- STORAGE
 local ESP = {}
 
--- ====================== CLEANUP ======================
+-- CLEANUP
 local function Clear(plr)
     local data = ESP[plr]
     if not data then return end
 
     if data.Gui then data.Gui:Destroy() end
     if data.Box then data.Box:Destroy() end
-    if data.Cham then data.Cham:Destroy() end
 
     ESP[plr] = nil
 end
 
--- ====================== CREATE ======================
+-- CREATE
 local function Create(plr)
     if ESP[plr] then return end
     ESP[plr] = {}
 
-    -- NAME GUI
     local gui = Instance.new("BillboardGui")
     gui.Size = UDim2.new(0, 200, 0, 50)
     gui.StudsOffset = Vector3.new(0, 2.5, 0)
     gui.AlwaysOnTop = true
 
-    local txt = Instance.new("TextLabel")
-    txt.Size = UDim2.new(1, 0, 1, 0)
-    txt.BackgroundTransparency = 1
-    txt.Font = Enum.Font.GothamBold
-    txt.TextSize = TextSize
-    txt.TextStrokeTransparency = 0.3
-    txt.Parent = gui
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 12
+    label.TextStrokeTransparency = 0.3
+    label.Parent = gui
 
     ESP[plr].Gui = gui
-    ESP[plr].Text = txt
+    ESP[plr].Label = label
 
-    -- BOX (UI FRAME)
     local box = Instance.new("Frame")
+    box.AnchorPoint = Vector2.new(0.5, 0.5)
     box.BackgroundTransparency = 1
     box.BorderSizePixel = 2
     box.Parent = game.CoreGui
@@ -454,7 +449,7 @@ local function Create(plr)
     ESP[plr].Box = box
 end
 
--- ====================== LOOP ======================
+-- LOOP
 RunService.RenderStepped:Connect(function()
     if not ESPEnabled then return end
 
@@ -494,12 +489,11 @@ RunService.RenderStepped:Connect(function()
         local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
         if not onScreen then continue end
 
-        -- ====================== NAME ======================
+        -- NAME
         if NameEnabled then
             data.Gui.Parent = head
-            data.Text.TextColor3 = color
-            data.Text.Text = string.format(
-                "%s | HP: %d | %.0f",
+            data.Label.TextColor3 = color
+            data.Label.Text = string.format("%s | HP: %d | %.0fm",
                 plr.Name,
                 math.floor(hum.Health),
                 dist
@@ -509,10 +503,9 @@ RunService.RenderStepped:Connect(function()
             data.Gui.Enabled = false
         end
 
-        -- ====================== BOX ======================
+        -- BOX
         if BoxEnabled then
             local size = Vector2.new(60, 120)
-
             data.Box.Size = UDim2.new(0, size.X, 0, size.Y)
             data.Box.Position = UDim2.new(0, pos.X - size.X/2, 0, pos.Y - size.Y/2)
             data.Box.BorderColor3 = color
@@ -521,7 +514,7 @@ RunService.RenderStepped:Connect(function()
             data.Box.Visible = false
         end
 
-        -- ====================== CHAMS ======================
+        -- CHAMS
         if ChamsEnabled then
             local cham = char:FindFirstChild("ESP_CHAM")
             if not cham then
@@ -533,8 +526,6 @@ RunService.RenderStepped:Connect(function()
 
             cham.FillColor = color
             cham.OutlineColor = color
-            cham.FillTransparency = 0.5
-            cham.OutlineTransparency = 0.2
         else
             local cham = char:FindFirstChild("ESP_CHAM")
             if cham then cham:Destroy() end
@@ -542,7 +533,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ====================== UI ======================
+-- UI
 ESPTab:CreateToggle({
     Name = "Enable ESP",
     CurrentValue = false,
@@ -557,56 +548,30 @@ ESPTab:CreateToggle({
 })
 
 ESPTab:CreateToggle({
-    Name = "Show Teammates",
-    CurrentValue = false,
-    Callback = function(v)
-        ShowTeammates = v
-    end
+    Name = "Boxes",
+    CurrentValue = true,
+    Callback = function(v) BoxEnabled = v end
 })
 
 ESPTab:CreateToggle({
-    Name = "Box ESP",
+    Name = "Names / HP / Distance",
     CurrentValue = true,
-    Callback = function(v)
-        BoxEnabled = v
-    end
-})
-
-ESPTab:CreateToggle({
-    Name = "Name / HP / Distance",
-    CurrentValue = true,
-    Callback = function(v)
-        NameEnabled = v
-    end
+    Callback = function(v) NameEnabled = v end
 })
 
 ESPTab:CreateToggle({
     Name = "Chams",
     CurrentValue = false,
-    Callback = function(v)
-        ChamsEnabled = v
-    end
+    Callback = function(v) ChamsEnabled = v end
 })
 
-ESPTab:CreateInput({
-    Name = "Text Size",
-    PlaceholderText = "12",
-    Callback = function(v)
-        local n = tonumber(v)
-        if n then
-            TextSize = math.clamp(n, 8, 24)
-        end
-    end
-})
-
-ESPTab:CreateInput({
+ESPTab:CreateSlider({
     Name = "Max Distance",
-    PlaceholderText = "500",
+    Range = {50, 2000},
+    Increment = 10,
+    CurrentValue = 500,
     Callback = function(v)
-        local n = tonumber(v)
-        if n then
-            MaxDistance = math.clamp(n, 50, 2000)
-        end
+        MaxDistance = v
     end
 })
 -- ====================== MOVEMENT ======================
