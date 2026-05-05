@@ -383,14 +383,16 @@ game.Players.PlayerAdded:Connect(function()
 end)
 
 print("✅ Troll Tab Loaded - TP Behind + Team Control")
--- ===================== ESP =====================
+-- ====================== ESP TAB (REPLACEMENT CLEAN VERSION) ======================
+local ESPTab = Window:CreateTab("ESP", 4483362458)
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- ===================== SETTINGS =====================
+-- SETTINGS
 local ESPEnabled = false
 local ShowTeammates = false
 
@@ -399,82 +401,61 @@ local TracerEnabled = true
 local NameEnabled = true
 local ChamsEnabled = false
 
+local TextSize = 12
 local MaxDistance = 500
 
+-- COLORS
 local EnemyColor = Color3.fromRGB(255, 105, 180)
 local TeamColor = Color3.fromRGB(170, 85, 255)
 
+-- STORAGE
 local ESP = {}
 
--- ===================== UI ROOT =====================
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-
-local Window = Rayfield:CreateWindow({
-    Name = "CHAOS FPS MENU",
-    LoadingTitle = "Loading Chaos...",
-    LoadingSubtitle = "ESP System",
-})
-
-local ESPTab = Window:CreateTab("ESP", 4483362458)
-
--- ===================== CLEAN =====================
+-- ====================== CLEANUP ======================
 local function Clear(plr)
     local data = ESP[plr]
     if not data then return end
 
-    if data.Box then data.Box:Destroy() end
-    if data.Tracer then data.Tracer:Destroy() end
     if data.Gui then data.Gui:Destroy() end
+    if data.Box then data.Box:Destroy() end
     if data.Cham then data.Cham:Destroy() end
 
     ESP[plr] = nil
 end
 
--- ===================== CREATE =====================
+-- ====================== CREATE ======================
 local function Create(plr)
     if ESP[plr] then return end
     ESP[plr] = {}
 
-    -- BILLBOARD (Name/HP/Distance)
+    -- NAME GUI
     local gui = Instance.new("BillboardGui")
     gui.Size = UDim2.new(0, 200, 0, 50)
-    gui.AlwaysOnTop = true
     gui.StudsOffset = Vector3.new(0, 2.5, 0)
+    gui.AlwaysOnTop = true
 
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamBold
-    label.TextScaled = false
-    label.TextSize = 12
-    label.TextStrokeTransparency = 0.3
-    label.Parent = gui
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Font = Enum.Font.GothamBold
+    txt.TextSize = TextSize
+    txt.TextStrokeTransparency = 0.3
+    txt.Parent = gui
 
     ESP[plr].Gui = gui
-    ESP[plr].Label = label
+    ESP[plr].Text = txt
 
-    -- BOX (UI Frame)
+    -- BOX (UI FRAME)
     local box = Instance.new("Frame")
-    box.AnchorPoint = Vector2.new(0.5, 0.5)
     box.BackgroundTransparency = 1
     box.BorderSizePixel = 2
-    box.Visible = true
     box.Parent = game.CoreGui
 
     ESP[plr].Box = box
-
-    -- TRACER (UI Line)
-    local tracer = Drawing and Drawing.new("Line") or nil
-    if tracer then
-        tracer.Thickness = 1
-        tracer.Transparency = 1
-        ESP[plr].Tracer = tracer
-    end
 end
 
--- ===================== LOOP =====================
+-- ====================== LOOP ======================
 RunService.RenderStepped:Connect(function()
-
     if not ESPEnabled then return end
 
     local lpChar = LocalPlayer.Character
@@ -513,12 +494,12 @@ RunService.RenderStepped:Connect(function()
         local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
         if not onScreen then continue end
 
-        -- ===================== NAME =====================
+        -- ====================== NAME ======================
         if NameEnabled then
             data.Gui.Parent = head
-            data.Label.TextColor3 = color
-            data.Label.Text = string.format(
-                "%s | HP: %d | %.0fm",
+            data.Text.TextColor3 = color
+            data.Text.Text = string.format(
+                "%s | HP: %d | %.0f",
                 plr.Name,
                 math.floor(hum.Health),
                 dist
@@ -528,7 +509,7 @@ RunService.RenderStepped:Connect(function()
             data.Gui.Enabled = false
         end
 
-        -- ===================== BOX =====================
+        -- ====================== BOX ======================
         if BoxEnabled then
             local size = Vector2.new(60, 120)
 
@@ -540,40 +521,30 @@ RunService.RenderStepped:Connect(function()
             data.Box.Visible = false
         end
 
-        -- ===================== TRACER =====================
-        if TracerEnabled and data.Tracer then
-            data.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-            data.Tracer.To = Vector2.new(pos.X, pos.Y)
-            data.Tracer.Color = color
-            data.Tracer.Visible = true
-        elseif data.Tracer then
-            data.Tracer.Visible = false
-        end
-
-        -- ===================== CHAMS =====================
+        -- ====================== CHAMS ======================
         if ChamsEnabled then
-            local cham = char:FindFirstChild("CHAOS_CHAM")
+            local cham = char:FindFirstChild("ESP_CHAM")
             if not cham then
                 cham = Instance.new("Highlight")
-                cham.Name = "CHAOS_CHAM"
+                cham.Name = "ESP_CHAM"
                 cham.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
                 cham.Parent = char
             end
 
             cham.FillColor = color
             cham.OutlineColor = color
-            cham.FillTransparency = 0.4
-            cham.OutlineTransparency = 0
+            cham.FillTransparency = 0.5
+            cham.OutlineTransparency = 0.2
         else
-            local cham = char:FindFirstChild("CHAOS_CHAM")
+            local cham = char:FindFirstChild("ESP_CHAM")
             if cham then cham:Destroy() end
         end
     end
 end)
 
--- ===================== RAYFIELD CONTROLS =====================
+-- ====================== UI ======================
 ESPTab:CreateToggle({
-    Name = "Enable Chaos ESP",
+    Name = "Enable ESP",
     CurrentValue = false,
     Callback = function(v)
         ESPEnabled = v
@@ -586,42 +557,56 @@ ESPTab:CreateToggle({
 })
 
 ESPTab:CreateToggle({
-    Name = "Teammates",
+    Name = "Show Teammates",
     CurrentValue = false,
-    Callback = function(v) ShowTeammates = v end
+    Callback = function(v)
+        ShowTeammates = v
+    end
 })
 
 ESPTab:CreateToggle({
-    Name = "Boxes",
+    Name = "Box ESP",
     CurrentValue = true,
-    Callback = function(v) BoxEnabled = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Tracers",
-    CurrentValue = true,
-    Callback = function(v) TracerEnabled = v end
+    Callback = function(v)
+        BoxEnabled = v
+    end
 })
 
 ESPTab:CreateToggle({
     Name = "Name / HP / Distance",
     CurrentValue = true,
-    Callback = function(v) NameEnabled = v end
+    Callback = function(v)
+        NameEnabled = v
+    end
 })
 
 ESPTab:CreateToggle({
     Name = "Chams",
     CurrentValue = false,
-    Callback = function(v) ChamsEnabled = v end
+    Callback = function(v)
+        ChamsEnabled = v
+    end
 })
 
-ESPTab:CreateSlider({
-    Name = "Max Distance",
-    Range = {50, 2000},
-    Increment = 10,
-    CurrentValue = 500,
+ESPTab:CreateInput({
+    Name = "Text Size",
+    PlaceholderText = "12",
     Callback = function(v)
-        MaxDistance = v
+        local n = tonumber(v)
+        if n then
+            TextSize = math.clamp(n, 8, 24)
+        end
+    end
+})
+
+ESPTab:CreateInput({
+    Name = "Max Distance",
+    PlaceholderText = "500",
+    Callback = function(v)
+        local n = tonumber(v)
+        if n then
+            MaxDistance = math.clamp(n, 50, 2000)
+        end
     end
 })
 -- ====================== MOVEMENT ======================
