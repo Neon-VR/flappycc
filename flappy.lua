@@ -18,14 +18,21 @@ local VirtualUser = game:GetService("VirtualUser")
 -- ====================== COMBAT TAB ======================
 local Combat = Window:CreateTab("Combat", 4483362458)
 
--- Settings
+-- ==================== SETTINGS ====================
 local AimbotEnabled = false
 local SilentAimEnabled = false
+local TriggerbotEnabled = false
+local AutoShootEnabled = false
+local RecoilControlEnabled = false
+local ResolverEnabled = false
+
+local AimMode = "Legit" -- Legit / Rage
 local VisCheck = true
 local TargetTeammates = false
 local TargetNPCs = false
-local BulletPrediction = false
+local BulletPrediction = true
 local BulletDropCompensation = true
+
 local Smoothness = 12
 local AimFOV = 120
 local MaxAimDistance = 300
@@ -35,15 +42,20 @@ local GameFOV = 70
 
 local currentTarget = nil
 local lockedTarget = nil
+local lastTargetPos = nil
+local lastTargetVel = Vector3.new()
 
-local AimbotKey = Enum.UserInputType.MouseButton2   -- Default RMB
-local SilentAimKey = Enum.KeyCode.R                 -- Default R
+local AimbotKey = Enum.UserInputType.MouseButton2
+local SilentAimKey = Enum.KeyCode.R
+local TriggerKey = Enum.KeyCode.LeftControl
 
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
 local UserInput = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
 
--- FOV Circle
+-- ==================== DRAWINGS ====================
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
 FOVCircle.NumSides = 100
@@ -52,101 +64,149 @@ FOVCircle.Transparency = 0.75
 FOVCircle.Filled = false
 FOVCircle.Visible = false
 
--- ====================== UI ======================
-Combat:CreateToggle({
-    Name = "AI Aimbot",
-    CurrentValue = false,
-    Callback = function(v) AimbotEnabled = v end
-})
+-- ==================== UI ====================
+Combat:CreateToggle({Name = "Aimbot", CurrentValue = false, Callback = function(v) AimbotEnabled = v end})
+Combat:CreateKeybind({Name = "Aimbot Key", CurrentKeybind = "MouseButton2", HoldToUse = true, Callback = function(k) AimbotKey = k end})
 
-Combat:CreateKeybind({
-    Name = "Aimbot Keybind",
-    CurrentKeybind = "MouseButton2",
-    HoldToUse = true,
-    Callback = function() end
-})
+Combat:CreateToggle({Name = "Silent Aim", CurrentValue = false, Callback = function(v) SilentAimEnabled = v end})
+Combat:CreateKeybind({Name = "Silent Aim Key", CurrentKeybind = "R", HoldToUse = true, Callback = function(k) SilentAimKey = k end})
 
-Combat:CreateToggle({
-    Name = "Silent Aim",
-    CurrentValue = false,
-    Callback = function(v) SilentAimEnabled = v end
-})
+Combat:CreateToggle({Name = "Triggerbot", CurrentValue = false, Callback = function(v) TriggerbotEnabled = v end})
+Combat:CreateToggle({Name = "Auto Shoot", CurrentValue = false, Callback = function(v) AutoShootEnabled = v end})
+Combat:CreateToggle({Name = "Recoil Control", CurrentValue = false, Callback = function(v) RecoilControlEnabled = v end})
+Combat:CreateToggle({Name = "Resolver", CurrentValue = false, Callback = function(v) ResolverEnabled = v end})
 
-Combat:CreateKeybind({
-    Name = "Silent Aim Keybind",
-    CurrentKeybind = "R",
-    HoldToUse = true,
-    Callback = function() end
-})
+Combat:CreateDropdown({Name = "Aim Mode", Options = {"Legit", "Rage"}, CurrentOption = {"Legit"}, Callback = function(opt) AimMode = opt[1] end})
 
-Combat:CreateToggle({Name = "VisCheck (Only Visible Players)", CurrentValue = true, Callback = function(v) VisCheck = v end})
+Combat:CreateToggle({Name = "Visibility Check", CurrentValue = true, Callback = function(v) VisCheck = v end})
 Combat:CreateToggle({Name = "Target Teammates", CurrentValue = false, Callback = function(v) TargetTeammates = v end})
 Combat:CreateToggle({Name = "Target NPCs/Bots", CurrentValue = false, Callback = function(v) TargetNPCs = v end})
-Combat:CreateToggle({Name = "Bullet Prediction", CurrentValue = false, Callback = function(v) BulletPrediction = v end})
+
+Combat:CreateToggle({Name = "Bullet Prediction", CurrentValue = true, Callback = function(v) BulletPrediction = v end})
 Combat:CreateToggle({Name = "Bullet Drop Compensation", CurrentValue = true, Callback = function(v) BulletDropCompensation = v end})
 
-Combat:CreateInput({Name = "Max Aim Distance (studs)", PlaceholderText = "300", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then MaxAimDistance = math.clamp(num, 50, 2000) end end})
-Combat:CreateInput({Name = "Aimbot Smoothness (1-25)", PlaceholderText = "12", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then Smoothness = math.clamp(num, 1, 25) end end})
-Combat:CreateInput({Name = "Aimbot FOV (30-400)", PlaceholderText = "120", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then AimFOV = math.clamp(num, 30, 400) end end})
-Combat:CreateInput({Name = "Bullet Speed (studs/s)", PlaceholderText = "1500", RemoveTextAfterFocusLost = false, Callback = function(text) local num = tonumber(text) if num then BulletSpeed = math.clamp(num, 500, 5000) end end})
+Combat:CreateInput({Name = "Max Distance", PlaceholderText = "300", Callback = function(t) local n=tonumber(t) if n then MaxAimDistance=math.clamp(n,50,2000) end end})
+Combat:CreateInput({Name = "Smoothness", PlaceholderText = "12", Callback = function(t) local n=tonumber(t) if n then Smoothness=math.clamp(n,1,35) end end})
+Combat:CreateInput({Name = "FOV", PlaceholderText = "120", Callback = function(t) local n=tonumber(t) if n then AimFOV=math.clamp(n,30,400) end end})
+Combat:CreateInput({Name = "Bullet Speed", PlaceholderText = "1500", Callback = function(t) local n=tonumber(t) if n then BulletSpeed=math.clamp(n,500,10000) end end})
 
-Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
+Combat:CreateDropdown({Name = "Aim Part", Options = {"Head", "UpperTorso", "HumanoidRootPart", "Closest"}, CurrentOption = {"Head"}, Callback = function(opt) AimPart = opt[1] end})
+
 Combat:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) FOVCircle.Visible = v end})
 
--- Game FOV Changer
-Combat:CreateInput({
-    Name = "Game FOV (30-120)",
-    PlaceholderText = "70",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            GameFOV = math.clamp(num, 30, 120)
-            Camera.FieldOfView = GameFOV
+Combat:CreateInput({Name = "Game FOV", PlaceholderText = "70", Callback = function(t)
+    local n = tonumber(t)
+    if n then GameFOV = math.clamp(n, 30, 120); Camera.FieldOfView = GameFOV end
+end})
+
+-- ==================== HELPER FUNCTIONS ====================
+local function isValidTarget(char, hum, root)
+    return char and hum and root and hum.Health > 0
+end
+
+local function getSmartTargetPart(char, lpRoot)
+    if AimPart ~= "Closest" then
+        return char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
+    end
+
+    local bestPart, bestDist = nil, math.huge
+    local candidates = {"Head", "UpperTorso", "HumanoidRootPart"}
+
+    for _, name in ipairs(candidates) do
+        local part = char:FindFirstChild(name)
+        if part then
+            local dist = (part.Position - lpRoot.Position).Magnitude
+            if dist < bestDist then
+                bestDist = dist
+                bestPart = part
+            end
         end
     end
-})
+    return bestPart or char:FindFirstChild("Head")
+end
 
--- ====================== TARGET SELECTION ======================
+local function applyResolver(targetPos, velocity)
+    if not ResolverEnabled or not lastTargetPos then
+        lastTargetPos = targetPos
+        lastTargetVel = velocity
+        return targetPos
+    end
+
+    -- Simple desync/anti-aim resolver
+    local predictedVel = (targetPos - lastTargetPos) / 0.025
+    local smoothedVel = lastTargetVel:Lerp(predictedVel, 0.65)
+    lastTargetVel = smoothedVel
+
+    lastTargetPos = targetPos
+    return targetPos + smoothedVel * 0.035 -- small correction
+end
+
+local function getAimPosition(targetPart)
+    local aimPos = targetPart.Position
+    local char = targetPart.Parent
+    local root = char:FindFirstChild("HumanoidRootPart")
+
+    if BulletPrediction and root then
+        local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        if lpRoot then
+            local dist = (aimPos - lpRoot.Position).Magnitude
+            local travelTime = dist / BulletSpeed
+
+            local resolvedPos = applyResolver(aimPos, root.Velocity)
+            local predicted = resolvedPos + root.Velocity * travelTime
+
+            if BulletDropCompensation and workspace.Gravity then
+                local drop = 0.5 * workspace.Gravity * travelTime^2
+                predicted += Vector3.new(0, -drop * 0.85, 0)
+            end
+            aimPos = predicted
+        end
+    end
+    return aimPos
+end
+
+-- ==================== TARGET SELECTION ====================
 task.spawn(function()
     while true do
-        task.wait(0.03)
-
-        if not (AimbotEnabled or SilentAimEnabled) then
-            lockedTarget = nil
+        task.wait(0.02)
+        if not (AimbotEnabled or SilentAimEnabled or TriggerbotEnabled) then
             currentTarget = nil
+            lockedTarget = nil
             continue
         end
 
-        local lp = game.Players.LocalPlayer
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then continue end
 
+        -- Memory aim with hysteresis
         if lockedTarget and lockedTarget.Parent then
             local char = lockedTarget.Parent
             local hum = char:FindFirstChild("Humanoid")
             local root = char:FindFirstChild("HumanoidRootPart")
-            if hum and hum.Health > 0 and root then
-                local pos, onScreen = Camera:WorldToViewportPoint(lockedTarget.Position)
-                local centerDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
-                if onScreen and centerDist <= AimFOV + 25 then
-                    currentTarget = lockedTarget
+            local tPart = getSmartTargetPart(char, lpRoot)
+
+            if isValidTarget(char, hum, root) and tPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(tPart.Position)
+                local centerDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                if onScreen and centerDist <= AimFOV * 1.4 then
+                    currentTarget = tPart
                     continue
                 end
             end
         end
 
         local bestTarget, bestScore = nil, -math.huge
-        for _, plr in ipairs(game.Players:GetPlayers()) do
+
+        for _, plr in ipairs(Players:GetPlayers()) do
             if plr == lp or not plr.Character then continue end
             if not TargetTeammates and plr.Team == lp.Team then continue end
 
             local char = plr.Character
-            local targetPart = char:FindFirstChild(AimPart) or char:FindFirstChild("Head")
-            local root = char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChild("Humanoid")
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local targetPart = getSmartTargetPart(char, lpRoot)
 
-            if not targetPart or not root or not hum or hum.Health <= 0 then continue end
+            if not isValidTarget(char, hum, root) or not targetPart then continue end
 
             local distance = (targetPart.Position - lpRoot.Position).Magnitude
             if distance > MaxAimDistance then continue end
@@ -161,12 +221,13 @@ task.spawn(function()
                 local params = RaycastParams.new()
                 params.FilterDescendantsInstances = {lp.Character}
                 params.FilterType = Enum.RaycastFilterType.Exclude
-                local result = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, params)
+                local result = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * (distance + 12), params)
                 if result and not result.Instance:IsDescendantOf(char) then continue end
             end
 
-            local score = -centerDist * 2.5 - distance * 0.6
-            if targetPart.Name == "Head" then score += 35 end
+            local score = -centerDist * 3.2 - distance * 0.35
+            if targetPart.Name == "Head" then score += 55 end
+            if AimMode == "Rage" then score = score + 40 end
 
             if score > bestScore then
                 bestScore = score
@@ -177,14 +238,23 @@ task.spawn(function()
         if bestTarget then
             lockedTarget = bestTarget
             currentTarget = bestTarget
+            lastTargetPos = bestTarget.Position
         end
     end
 end)
 
--- ====================== AIMING ======================
-RunService.RenderStepped:Connect(function()
+-- ==================== MAIN LOOP ====================
+local lastRecoilTime = 0
+
+RunService.RenderStepped:Connect(function(dt)
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-    FOVCircle.Radius = AimFOV
+    -- Dynamic FOV scaling
+    local dynamicFOV = AimFOV
+    if currentTarget then
+        local dist = (currentTarget.Position - Camera.CFrame.Position).Magnitude
+        dynamicFOV = AimFOV * math.clamp(1 - (dist / MaxAimDistance) * 0.4, 0.6, 1)
+    end
+    FOVCircle.Radius = dynamicFOV
 
     local target = currentTarget
     if not target or not target.Parent then return end
@@ -196,45 +266,63 @@ RunService.RenderStepped:Connect(function()
         return
     end
 
-    local aimPos = target.Position
-    local root = target.Parent:FindFirstChild("HumanoidRootPart")
+    local aimPos = getAimPosition(target)
 
-    if BulletPrediction and root and root.Velocity then
-        local lpRoot = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if lpRoot then
-            local dist = (aimPos - lpRoot.Position).Magnitude
-            local travelTime = dist / BulletSpeed
-            local predicted = aimPos + root.Velocity * travelTime
-            if BulletDropCompensation then
-                local drop = 0.5 * workspace.Gravity * travelTime^2
-                predicted += Vector3.new(0, -drop * 0.75, 0)
-            end
-            aimPos = predicted
-        end
-    end
-
-    -- Aimbot with custom keybind
+    -- ==================== AIMBOT ====================
     if AimbotEnabled then
-        local isPressed = (AimbotKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(AimbotKey)) or 
-                          (AimbotKey.EnumType == Enum.KeyCode and UserInput:IsKeyDown(AimbotKey))
+        local isPressed = (AimbotKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(AimbotKey)) or UserInput:IsKeyDown(AimbotKey)
+
         if isPressed then
             local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCF, 1 / math.max(Smoothness, 5))
+            local factor = (AimMode == "Rage") and 0.75 or (1 / math.max(Smoothness, 5))
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, factor)
         end
     end
 
-    -- Silent Aim with custom keybind
+    -- ==================== SILENT AIM ====================
     if SilentAimEnabled then
-        local isPressed = (SilentAimKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(SilentAimKey)) or 
-                          (SilentAimKey.EnumType == Enum.KeyCode and UserInput:IsKeyDown(SilentAimKey))
+        local isPressed = (SilentAimKey.EnumType == Enum.UserInputType and UserInput:IsMouseButtonPressed(SilentAimKey)) or UserInput:IsKeyDown(SilentAimKey)
+
         if isPressed then
-            local mouse = game.Players.LocalPlayer:GetMouse()
+            local mouse = lp:GetMouse()
+            mouse.Hit = CFrame.new(aimPos)
             mouse.Target = target
+
+            -- Stronger universal silent aim (metatable hook example - works in many games)
+            -- pcall(function()
+            --     local mt = getrawmetatable(game)
+            --     local old = mt.__namecall
+            --     setreadonly(mt, false)
+            --     mt.__namecall = newcclosure(function(self, ...)
+            --         local args = {...}
+            --         if getnamecallmethod() == "FireServer" and self.Name:find("Bullet") then
+            --             args[1] = aimPos -- adjust per game
+            --         end
+            --         return old(self, unpack(args))
+            --     end)
+            --     setreadonly(mt, true)
+            -- end)
         end
+    end
+
+    -- ==================== TRIGGERBOT + AUTO SHOOT ====================
+    if (TriggerbotEnabled or AutoShootEnabled) then
+        local mouse = lp:GetMouse()
+        if mouse.Target and target and mouse.Target:IsDescendantOf(target.Parent) then
+            mouse1click()
+            task.wait(AimMode == "Rage" and 0.03 or 0.07)
+        end
+    end
+
+    -- ==================== RECOIL CONTROL ====================
+    if RecoilControlEnabled and AimbotEnabled and tick() - lastRecoilTime > 0.1 then
+        local recoil = Camera.CFrame.LookVector * 0.8 -- adjust strength
+        Camera.CFrame = Camera.CFrame * CFrame.Angles(-recoil.Y * 0.025, 0, 0)
+        lastRecoilTime = tick()
     end
 end)
 
-print("✅ Combat Tab with Custom Keybinds Loaded!")
+print("✅ God-Tier Universal Combat Tab Loaded!")
 -- ====================== TROLL TAB ======================
 local Troll = Window:CreateTab("Troll", 4483362458)
 
@@ -386,197 +474,217 @@ print("✅ Troll Tab Loaded - TP Behind + Team Control")
 -- ====================== ESP TAB ======================
 local ESPTab = Window:CreateTab("ESP", 4483362458)
 
--- Settings
+-- ==================== SETTINGS ====================
 local ESPEnabled = false
 local BoxEnabled = true
+local HealthBarEnabled = true
 local NameEnabled = true
 local TracerEnabled = true
-local ChamsEnabled = false
-local MaxTracerDistance = 200
+local SkeletonEnabled = true
+local ChamsEnabled = true
+local ShowTeammates = true
 
-local ESPData = {}
+local MaxDistance = 1500
+
+local ActiveDrawings = {}  -- Store all active drawings for cleanup
 local Camera = workspace.CurrentCamera
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
 
 local ESPConnection = nil
 
+local TeamColor = Color3.fromRGB(180, 50, 255)   -- Purple
+local EnemyColor = Color3.fromRGB(255, 100, 200) -- Pink
+
 -- ====================== CLEANUP ======================
-local function CleanupPlayer(player)
-    local data = ESPData[player]
-    if not data then return end
-
-    if data.Box then data.Box.Visible = false; data.Box:Remove() end
-    if data.Tracer then data.Tracer.Visible = false; data.Tracer:Remove() end
-    if data.Billboard then data.Billboard:Destroy() end
-    if data.Highlight then data.Highlight:Destroy() end
-
-    ESPData[player] = nil
+local function ClearAllDrawings()
+    for _, drawing in ipairs(ActiveDrawings) do
+        if drawing.Remove then drawing:Remove() end
+    end
+    table.clear(ActiveDrawings)
 end
 
 local function FullCleanup()
-    for player in pairs(ESPData) do
-        CleanupPlayer(player)
+    ClearAllDrawings()
+    -- Clean chams
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Highlight") and obj.Name == "SimpleChams" then
+            obj:Destroy()
+        end
     end
-    table.clear(ESPData)
 end
 
--- ====================== UPDATE FUNCTIONS ======================
-local function UpdateBox(data, screenPos, height)
-    if not BoxEnabled then
-        if data.Box then data.Box.Visible = false end
-        return
-    end
-
-    if not data.Box then
-        data.Box = Drawing.new("Square")
-        data.Box.Filled = false
-        data.Box.Thickness = 2
-        data.Box.Transparency = 0.85
-    end
-
-    local size = Vector2.new(height * 0.6, height * 1.85)
-    data.Box.Size = size
-    data.Box.Position = Vector2.new(screenPos.X - size.X/2, screenPos.Y - size.Y/2)
-    data.Box.Color = Color3.fromRGB(0, 255, 255)
-    data.Box.Visible = true
+-- ====================== HELPERS ======================
+local function IsVisible(character)
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root or not lp.Character then return false end
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {lp.Character}
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local result = workspace:Raycast(Camera.CFrame.Position, (root.Position - Camera.CFrame.Position).Unit * 800, params)
+    return result and result.Instance:IsDescendantOf(character)
 end
 
-local function UpdateTracer(data, screenPos, distance)
-    if not TracerEnabled or distance > MaxTracerDistance then
-        if data.Tracer then data.Tracer.Visible = false end
-        return
-    end
-
-    if not data.Tracer then
-        data.Tracer = Drawing.new("Line")
-        data.Tracer.Thickness = 1.6
-        data.Tracer.Transparency = 0.75
-    end
-
-    data.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-    data.Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-    data.Tracer.Color = Color3.fromRGB(0, 255, 100)
-    data.Tracer.Visible = true
+local function GetColor(player)
+    return (player.Team == lp.Team) and TeamColor or EnemyColor
 end
 
-local function UpdateNameTag(data, player, char, distance)
-    if not NameEnabled then
-        if data.Billboard then data.Billboard.Enabled = false end
-        return
-    end
+-- ====================== DRAWING FUNCTIONS ======================
+local function NewLine()
+    local line = Drawing.new("Line")
+    line.Thickness = 2.2
+    line.Transparency = 0.85
+    table.insert(ActiveDrawings, line)
+    return line
+end
 
+local function UpdateBox(screenPos, height, color)
+    local box = {}
+    for i = 1, 4 do box[i] = NewLine() end
+
+    local x = screenPos.X - height * 0.3
+    local y = screenPos.Y - height * 0.95
+    local w = height * 0.6
+    local h = height * 1.9
+
+    box[1].From = Vector2.new(x, y); box[1].To = Vector2.new(x+w, y)
+    box[2].From = Vector2.new(x+w, y); box[2].To = Vector2.new(x+w, y+h)
+    box[3].From = Vector2.new(x+w, y+h); box[3].To = Vector2.new(x, y+h)
+    box[4].From = Vector2.new(x, y+h); box[4].To = Vector2.new(x, y)
+
+    for _, l in ipairs(box) do l.Color = color end
+end
+
+local function UpdateHealthBar(screenPos, height, hum, color)
+    if not HealthBarEnabled then return end
+    local bar = Drawing.new("Square")
+    bar.Filled = true
+    table.insert(ActiveDrawings, bar)
+
+    local barHeight = height * (hum.Health / hum.MaxHealth)
+    bar.Position = Vector2.new(screenPos.X - height * 0.38, screenPos.Y - height/2)
+    bar.Size = Vector2.new(5, barHeight)
+    bar.Color = Color3.fromRGB(255 - (hum.Health/hum.MaxHealth*255), hum.Health/hum.MaxHealth*255, 80)
+end
+
+local function UpdateTracer(screenPos, color)
+    if not TracerEnabled then return end
+    local tracer = NewLine()
+    tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y - 40)
+    tracer.To = Vector2.new(screenPos.X, screenPos.Y)
+    tracer.Color = color
+    tracer.Thickness = 1.6
+end
+
+local function UpdateNameTag(player, char, distance)
+    if not NameEnabled then return end
     local head = char:FindFirstChild("Head")
-    local humanoid = char:FindFirstChild("Humanoid")
-    if not head or not humanoid or humanoid.Health <= 0 then
-        if data.Billboard then data.Billboard.Enabled = false end
-        return
-    end
+    local hum = char:FindFirstChild("Humanoid")
+    if not head or not hum then return end
 
-    if not data.Billboard then
-        data.Billboard = Instance.new("BillboardGui")
-        data.Billboard.Name = "flappyESP"
-        data.Billboard.Adornee = head
-        data.Billboard.Size = UDim2.new(0, 240, 0, 90)
-        data.Billboard.StudsOffset = Vector3.new(0, 3.8, 0)
-        data.Billboard.AlwaysOnTop = true
-        data.Billboard.LightInfluence = 0
-        data.Billboard.ResetOnSpawn = false
+    local billboard = Instance.new("BillboardGui")
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 200, 0, 80)
+    billboard.StudsOffset = Vector3.new(0, 3.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
 
-        local txt = Instance.new("TextLabel")
-        txt.Name = "Text"
-        txt.BackgroundTransparency = 1
-        txt.TextScaled = true
-        txt.Font = Enum.Font.GothamBold
-        txt.TextStrokeTransparency = 0.1
-        txt.TextStrokeColor3 = Color3.fromRGB(0,0,0)
-        txt.TextColor3 = Color3.fromRGB(0, 255, 255)
-        txt.Size = UDim2.new(1, 0, 1, 0)
-        txt.Parent = data.Billboard
-    end
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.TextScaled = true
+    label.Font = Enum.Font.GothamBold
+    label.TextStrokeTransparency = 0.3
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Size = UDim2.new(1,0,1,0)
+    label.Text = string.format("%s\n%d HP\n%d studs", player.Name, math.floor(hum.Health), math.floor(distance))
+    label.Parent = billboard
 
-    if data.Billboard.Parent ~= head then
-        data.Billboard.Parent = head
-    end
-
-    local health = math.floor(humanoid.Health + 0.5)
-    data.Billboard.Text.Text = string.format("%s\n[%d HP]\n%d studs", player.Name, health, math.floor(distance))
-    data.Billboard.Enabled = true
+    table.insert(ActiveDrawings, billboard) -- even though it's Instance, for cleanup
 end
 
--- ====================== FIXED CHAMS ======================
+local function UpdateSkeleton(char, color)
+    if not SkeletonEnabled then return end
+    local joints = {
+        {"Head","UpperTorso"},{"UpperTorso","HumanoidRootPart"},
+        {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},
+        {"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"}
+    }
+
+    for _, pair in ipairs(joints) do
+        local p1 = char:FindFirstChild(pair[1])
+        local p2 = char:FindFirstChild(pair[2])
+        if p1 and p2 then
+            local v1, on1 = Camera:WorldToViewportPoint(p1.Position)
+            local v2, on2 = Camera:WorldToViewportPoint(p2.Position)
+            if on1 and on2 then
+                local line = NewLine()
+                line.From = Vector2.new(v1.X, v1.Y)
+                line.To = Vector2.new(v2.X, v2.Y)
+                line.Color = color
+                line.Thickness = 1.4
+            end
+        end
+    end
+end
+
 local function UpdateChams(char)
     if not ChamsEnabled then return end
+    if char:FindFirstChild("SimpleChams") then return end
 
-    local highlight = char:FindFirstChild("flappyChams")
-    if highlight then 
-        highlight.Enabled = true
-        return 
-    end
-
-    -- Create new Highlight
-    highlight = Instance.new("Highlight")
-    highlight.Name = "flappyChams"
-    highlight.FillColor = Color3.fromRGB(0, 255, 255)
-    highlight.OutlineColor = Color3.fromRGB(0, 200, 255)
-    highlight.FillTransparency = 0.6
-    highlight.OutlineTransparency = 0.2
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = true
-    highlight.Parent = char
+    local hl = Instance.new("Highlight")
+    hl.Name = "SimpleChams"
+    hl.FillColor = Color3.fromRGB(220, 100, 255)
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.FillTransparency = 0.6
+    hl.OutlineTransparency = 0.1
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = char
 end
 
 -- ====================== MAIN LOOP ======================
 local function StartESP()
     if ESPConnection then return end
 
-    ESPConnection = RunService.Heartbeat:Connect(function()
+    ESPConnection = RunService.RenderStepped:Connect(function()
         if not ESPEnabled then return end
 
-        local lp = game.Players.LocalPlayer
+        ClearAllDrawings() -- Clear previous frame drawings
+
         local lpRoot = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
         if not lpRoot then return end
 
-        for _, player in ipairs(game.Players:GetPlayers()) do
+        for _, player in ipairs(Players:GetPlayers()) do
             if player == lp then continue end
 
             local char = player.Character
-            if not char then
-                CleanupPlayer(player)
-                continue
-            end
+            if not char then continue end
 
             local root = char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char:FindFirstChild("Humanoid")
-
-            if not root or not humanoid or humanoid.Health <= 0 then
-                CleanupPlayer(player)
-                continue
-            end
-
-            if not ESPData[player] then
-                ESPData[player] = {}
-            end
-            local data = ESPData[player]
-
-            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-
-            if not onScreen then
-                if data.Box then data.Box.Visible = false end
-                if data.Tracer then data.Tracer.Visible = false end
-                if data.Billboard then data.Billboard.Enabled = false end
-                continue
-            end
+            local hum = char:FindFirstChild("Humanoid")
+            if not root or not hum or hum.Health <= 0 then continue end
 
             local distance = (root.Position - lpRoot.Position).Magnitude
+            if distance > MaxDistance then continue end
 
-            local top = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
-            local bottom = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
-            local height = top.Y - bottom.Y
+            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            if not onScreen then continue end
 
-            UpdateBox(data, screenPos, height)
-            UpdateTracer(data, screenPos, distance)
-            UpdateNameTag(data, player, char, distance)
-            UpdateChams(char)   -- Now runs every frame when enabled
+            local color = GetColor(player)
+
+            -- Box
+            if BoxEnabled then
+                local top = Camera:WorldToViewportPoint(root.Position + Vector3.new(0, 3, 0))
+                local bottom = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+                local height = top.Y - bottom.Y
+                UpdateBox(screenPos, height, color)
+            end
+
+            UpdateHealthBar(screenPos, 150, hum, color)
+            UpdateTracer(screenPos, color)
+            UpdateNameTag(player, char, distance)
+            UpdateSkeleton(char, color)
+            UpdateChams(char)
         end
     end)
 end
@@ -589,68 +697,26 @@ local function StopESP()
     FullCleanup()
 end
 
--- ====================== TOGGLES ======================
-ESPTab:CreateToggle({
-    Name = "Master ESP Toggle",
-    CurrentValue = false,
-    Callback = function(v)
-        ESPEnabled = v
-        if v then
-            StartESP()
-        else
-            StopESP()
-        end
-    end
-})
+-- ====================== UI ======================
+ESPTab:CreateToggle({Name = "Master ESP", CurrentValue = false, Callback = function(v)
+    ESPEnabled = v
+    if v then StartESP() else StopESP() end
+end})
 
-ESPTab:CreateToggle({
-    Name = "2D Box ESP",
-    CurrentValue = true,
-    Callback = function(v) BoxEnabled = v end
-})
+ESPTab:CreateToggle({Name = "Boxes", CurrentValue = true, Callback = function(v) BoxEnabled = v end})
+ESPTab:CreateToggle({Name = "Health Bars", CurrentValue = true, Callback = function(v) HealthBarEnabled = v end})
+ESPTab:CreateToggle({Name = "Name Tags", CurrentValue = true, Callback = function(v) NameEnabled = v end})
+ESPTab:CreateToggle({Name = "Tracers", CurrentValue = true, Callback = function(v) TracerEnabled = v end})
+ESPTab:CreateToggle({Name = "Skeleton", CurrentValue = true, Callback = function(v) SkeletonEnabled = v end})
+ESPTab:CreateToggle({Name = "Chams", CurrentValue = true, Callback = function(v) ChamsEnabled = v end})
+ESPTab:CreateToggle({Name = "Show Teammates", CurrentValue = true, Callback = function(v) ShowTeammates = v end})
 
-ESPTab:CreateToggle({
-    Name = "Name + Health + Distance",
-    CurrentValue = true,
-    Callback = function(v) NameEnabled = v end
-})
+ESPTab:CreateInput({Name = "Max Distance", PlaceholderText = "1500", Callback = function(t)
+    local n = tonumber(t)
+    if n then MaxDistance = math.clamp(n, 100, 5000) end
+end})
 
-ESPTab:CreateToggle({
-    Name = "Line Tracers",
-    CurrentValue = true,
-    Callback = function(v) TracerEnabled = v end
-})
-
-ESPTab:CreateToggle({
-    Name = "Cyan Chams",
-    CurrentValue = false,
-    Callback = function(v)
-        ChamsEnabled = v
-        if not v then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Highlight") and obj.Name == "flappyChams" then
-                    obj:Destroy()
-                end
-            end
-        end
-    end
-})
-
-ESPTab:CreateInput({
-    Name = "Max Tracer Distance (studs)",
-    PlaceholderText = "200",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        local num = tonumber(text)
-        if num then
-            MaxTracerDistance = math.clamp(num, 50, 1000)
-        end
-    end
-})
-
-game.Players.PlayerRemoving:Connect(CleanupPlayer)
-
-print("✅ ESP Updated - Chams should now apply to everyone reliably!")
+print("✅ Simplified Reliable ESP Loaded - Purple Teammates | Pink Enemies")
 -- ====================== MOVEMENT ======================
 local Movement = Window:CreateTab("Movement", 4483362458)
 
